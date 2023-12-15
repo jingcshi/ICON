@@ -1,6 +1,0 @@
-{
-    "cSpell.enabled": false,
-    "vim.startInInsertMode": true,
-    "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.autoImportCompletions": true
-}
