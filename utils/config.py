@@ -94,16 +94,24 @@ class icon_config(tree_config):
     transitive_reduction:bool=True
     log:Union[bool, int, List[str]]=False
 
+def locate_arg(conf:tree_config, arg:str):
+    if arg in conf.leaf_fields():
+        return arg
+    for f in conf.nonleaf_fields():
+        subloc = locate_arg(getattr(conf, f), arg)
+        if subloc:
+            return f + '.' + subloc
+    return ''
+
 def Update_config(conf:tree_config, arg:str, value:Any):
-    if arg in conf.arglist(flat=True):
-        if arg in conf.leaf_fields():
-            conf = replace(conf, **{arg: value})
-            return True
-        else:
-            for f in conf.nonleaf_fields():
-                if Update_config(getattr(conf, f), arg, value):
-                    break
-            return True
-    else:
-        return False
-        
+    location = locate_arg(conf,arg)
+    if location == '':
+        raise KeyError(f'{arg}')
+    return recursive_replace(conf, location, value)
+    
+def recursive_replace(root_obj: Any, replace_str: str, replace_with: Any) -> Any:
+    split_str = replace_str.split(".")
+    if len(split_str) == 1:
+        return replace(root_obj, **{split_str[0]: replace_with})
+    sub_obj = recursive_replace(getattr(root_obj, split_str[0]), ".".join(split_str[1:]), replace_with)
+    return replace(root_obj, **{split_str[0]: sub_obj})

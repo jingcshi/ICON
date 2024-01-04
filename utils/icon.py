@@ -12,7 +12,7 @@ from tqdm.notebook import tqdm
 from colorama import Fore, Style
 from utils.taxo_utils import taxonomy
 from utils.breadcrumb import tokenset
-import utils.config as Config
+import utils.config as _Config
 
 class NullContext:
     
@@ -621,7 +621,7 @@ def main(data:Union[taxonomy, o2.Ontology],
 class ICON:
     
     def __init__(self,
-                data: Union[taxonomy,o2.Ontology]=None,
+                data:Union[taxonomy,o2.Ontology]=None,
                 ret_model=None,
                 gen_model=None,
                 sub_model=None,
@@ -653,19 +653,19 @@ class ICON:
         if isinstance(data,o2.Ontology):
             data = taxonomy.from_ontology(data)
         self.data = data
-        self.models = Config.icon_models(ret_model,gen_model,sub_model)
-        self.caches = Config.icon_caches(lexical_cache,sub_score_cache)
-        self.config = Config.icon_config(mode,
+        self.models = _Config.icon_models(ret_model,gen_model,sub_model)
+        self.caches = _Config.icon_caches(lexical_cache,sub_score_cache)
+        self.config = _Config.icon_config(mode,
                                 rand_seed,
-                                Config.icon_auto_config(max_outer_loop),
-                                Config.icon_semiauto_config(semiauto_seeds),
-                                Config.icon_manual_config(input_concepts,inputs_concept_bases),
-                                Config.icon_ret_config(retrieve_size,restrict_combinations),
-                                Config.icon_gen_config(ignore_label,filter_subset),
-                                Config.icon_sub_config(
-                                    Config.icon_subgraph_config(subgraph_crop,subgraph_force,subgraph_strict),
-                                    Config.icon_search_config(threshold,tolerance,force_base_subsumptions,force_prune)),
-                                Config.icon_update_config(eqv_score_func,do_lexical_check),
+                                _Config.icon_auto_config(max_outer_loop),
+                                _Config.icon_semiauto_config(semiauto_seeds),
+                                _Config.icon_manual_config(input_concepts,inputs_concept_bases),
+                                _Config.icon_ret_config(retrieve_size,restrict_combinations),
+                                _Config.icon_gen_config(ignore_label,filter_subset),
+                                _Config.icon_sub_config(
+                                    _Config.icon_subgraph_config(subgraph_crop,subgraph_force,subgraph_strict),
+                                    _Config.icon_search_config(threshold,tolerance,force_base_subsumptions,force_prune)),
+                                _Config.icon_update_config(eqv_score_func,do_lexical_check),
                                 transitive_reduction,
                                 log)
         
@@ -708,4 +708,4 @@ class ICON:
 
     def update_config(self,**kwargs):
         for arg, value in kwargs.items():
-            Config.Update_config(self.config, arg, value)
+            self.config = _Config.Update_config(self.config, arg, value)
