@@ -160,11 +160,11 @@ cython_debug/
 #.idea/
 
 # VScode settings
-.vscode
+.vscode/
 
 # EBay data
-# ebay
+*ebay*
 
 # Testing
-# test.ipynb
+test.ipynb
 
