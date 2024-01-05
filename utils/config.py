@@ -1,10 +1,13 @@
-from typing import List, Union, Tuple, Callable, Dict, Any
+from typing import List, Union, Tuple, Callable, Dict, Any, Literal
 from dataclasses import dataclass, field, fields, replace
+from utils.taxo_utils import Taxonomy
+import numpy as np
 
 @dataclass
 class tree_config:
     
     def arglist(self, flat:bool=True):
+        
         args = []
         for f in fields(self):
             F = getattr(self,f.name)
@@ -18,21 +21,33 @@ class tree_config:
         return args
     
     def leaf_fields(self):
+        
         return [f.name for f in fields(self) if not isinstance(getattr(self,f.name),tree_config)]
     
     def nonleaf_fields(self):
+        
         return [f.name for f in fields(self) if isinstance(getattr(self,f.name),tree_config)]
 
 @dataclass
-class icon_models:
-    ret_model:Any
-    gen_model:Any
-    sub_model:Any
+class icon_models(tree_config):
+    ret_model:Any=None
+    gen_model:Any=None
+    sub_model:Any=None
 
 @dataclass
-class icon_caches:
+class icon_caches(tree_config):
     lexical_cache:Dict=field(default_factory=dict)
     sub_score_cache:Dict=field(default_factory=dict)
+
+@dataclass
+class icon_status(tree_config):
+    nextkey:int=0
+    outer_loop_count:int=0
+    inner_loop_count:int=0
+    pbar_outer:Any=None
+    pbar_inner:Any=None
+    working_taxo:Taxonomy=None
+    progress:np.ndarray=np.array([0,0], dtype=int)
 
 @dataclass
 class icon_auto_config(tree_config):
@@ -45,7 +60,7 @@ class icon_semiauto_config(tree_config):
 @dataclass
 class icon_manual_config(tree_config):
     input_concepts:List[str]=field(default_factory=list)
-    inputs_concept_bases:List[List[Union[int, str]]]=None
+    input_concept_bases:List[List[Union[int, str]]]=None
 
 @dataclass
 class icon_ret_config(tree_config):
@@ -77,12 +92,13 @@ class icon_sub_config(tree_config):
 
 @dataclass
 class icon_update_config(tree_config):
+    do_update:bool=True
     eqv_score_func:Callable[[Tuple[float, float]], float]=lambda x: x[0]*x[1]
     do_lexical_check:bool=True
 
 @dataclass
 class icon_config(tree_config):
-    mode:str='auto'
+    mode:Literal['auto', 'semiauto', 'manual']='auto'
     rand_seed:Any=114514
     auto_config:icon_auto_config=icon_auto_config()
     semiauto_config:icon_semiauto_config=icon_semiauto_config()
@@ -94,7 +110,8 @@ class icon_config(tree_config):
     transitive_reduction:bool=True
     log:Union[bool, int, List[str]]=False
 
-def locate_arg(conf:tree_config, arg:str):
+def locate_arg(conf: tree_config, arg: str) -> str:
+
     if arg in conf.leaf_fields():
         return arg
     for f in conf.nonleaf_fields():
@@ -103,13 +120,15 @@ def locate_arg(conf:tree_config, arg:str):
             return f + '.' + subloc
     return ''
 
-def Update_config(conf:tree_config, arg:str, value:Any):
+def Update_config(conf: tree_config, arg: str, value: Any) -> tree_config:
+    
     location = locate_arg(conf,arg)
     if location == '':
         raise KeyError(f'{arg}')
     return recursive_replace(conf, location, value)
-    
+
 def recursive_replace(root_obj: Any, replace_str: str, replace_with: Any) -> Any:
+    
     split_str = replace_str.split(".")
     if len(split_str) == 1:
         return replace(root_obj, **{split_str[0]: replace_with})

@@ -160,4 +160,10 @@ cython_debug/
 #.idea/
 
 # VScode settings
-.vscode/settings.json
+.vscode
+
+# EBay data
+ebay
+
+# Testing
+test.ipynb
