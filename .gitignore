@@ -163,7 +163,8 @@ cython_debug/
 .vscode
 
 # EBay data
-ebay
+# ebay
 
 # Testing
-test.ipynb
+# test.ipynb
+
