@@ -150,13 +150,12 @@ class ICON:
         except KeyError:
             return None
     
-    def update_sub_score_cache(self, inputs: Tuple[List[str], List[str]]) -> None:
+    def update_sub_score_cache(self, sub: List[str], sup: List[str]) -> None:
         
-        subclasses, superclasses = inputs
         # The model output is expected to be a numpy.array of shape [len(keypair)]
-        outputs = self.models.sub_model(inputs)
+        outputs = self.models.sub_model(sub, sup)
         for i,s in enumerate(outputs):
-            self.caches.sub_score_cache[(subclasses[i],superclasses[i])] = s.item()
+            self.caches.sub_score_cache[(sub[i], sup[i])] = s.item()
     
     def clear_sub_score_cache(self) -> None:
         
@@ -357,23 +356,23 @@ class ICON:
             top = taxo.get_GCD([])
         queue = deque([(n,0) for n in top])
         if top:
-            self.update_sub_score_cache(([newlabel]*len(top), taxo.get_label(top)))
+            self.update_sub_score_cache([newlabel]*len(top), taxo.get_label(top))
         visited = {}
 
         while queue:
             node, fails = queue.popleft()
             visited[node] = True
             to_cache = []
-            keypair = (newlabel,taxo.get_label(node))
-            if keypair in self.caches.sub_score_cache:
-                p = self.caches.sub_score_cache[keypair]
             # Key zero is always assumed to be the global root node. If force_known we also force the search to respect known subsumptions.
-            elif node == 0 or (force_known and all([taxo.subsumes(node, b) for b in base])):
+            if node == 0 or (force_known and all([taxo.subsumes(node, b) for b in base])):
                 p = 1.0
-                self.caches.sub_score_cache[keypair] = 1.0
             else:
-                p = self.models.sub_model(keypair).item()
-                self.caches.sub_score_cache[keypair] = p
+                nodelabel = taxo.get_label(node)
+                try:
+                    p = self.caches.sub_score_cache[(newlabel, nodelabel)]
+                except KeyError:
+                    p = self.models.sub_model(newlabel, nodelabel).item()
+                    self.caches.sub_score_cache[(newlabel, nodelabel)] = p
             
             if p >= self.config.sub_config.search.threshold:
                 sup[node] = p
@@ -390,7 +389,7 @@ class ICON:
                         queue.append((child,0))
                         to_cache.append(taxo.get_label(child))
                 if to_cache:
-                    self.update_sub_score_cache(([newlabel]*len(to_cache), to_cache))
+                    self.update_sub_score_cache([newlabel]*len(to_cache), to_cache)
             elif fails < self.config.sub_config.search.tolerance:
                 for child in taxo.get_subclasses(node):
                     if child not in visited:
@@ -398,7 +397,7 @@ class ICON:
                         queue.append((child,fails+1))
                         to_cache.append(taxo.get_label(child))
                 if to_cache:
-                    self.update_sub_score_cache(([newlabel]*len(to_cache), to_cache))
+                    self.update_sub_score_cache([newlabel]*len(to_cache), to_cache)
             elif self.config.sub_config.search.force_prune:
                 for desc in taxo.get_descendants(node):
                     visited[desc] = True
@@ -418,7 +417,7 @@ class ICON:
         bottom = taxo.get_LCA([])
         queue = deque([(n,0) for n in bottom])
         if bottom:
-            self.update_sub_score_cache((taxo.get_label(bottom), [newlabel]*len(bottom)))
+            self.update_sub_score_cache(taxo.get_label(bottom), [newlabel]*len(bottom))
         # The redundant superclasses are also logically certain to be non-subclasses, so we do not search on them
         visited = {k:True for k in sup_ancestors}
         
@@ -426,16 +425,16 @@ class ICON:
             node, fails = queue.popleft()
             visited[node] = True
             to_cache = []
-            keypair = (taxo.get_label(node),newlabel)
-            if keypair in self.caches.sub_score_cache:
-                p = self.caches.sub_score_cache[keypair]
             # Force the search to respect known subsumptions
-            elif force_known and node in base:
+            if force_known and node in base:
                 p = 1.0
-                self.caches.sub_score_cache[keypair] = 1.0
             else:
-                p = self.models.sub_model(keypair).item()
-                self.caches.sub_score_cache[keypair] = p
+                nodelabel = taxo.get_label(node)
+                try:
+                    p = self.caches.sub_score_cache[(nodelabel, newlabel)]
+                except KeyError:
+                    p = self.models.sub_model(nodelabel, newlabel).item()
+                    self.caches.sub_score_cache[(nodelabel, newlabel)] = p
                 
             if p >= self.config.sub_config.search.threshold:
                 if node in sup:
@@ -451,7 +450,7 @@ class ICON:
                         queue.append((parent,0))
                         to_cache.append(taxo.get_label(parent))
                 if to_cache:
-                    self.update_sub_score_cache((to_cache, [newlabel]*len(to_cache)))
+                    self.update_sub_score_cache(to_cache, [newlabel]*len(to_cache))
             elif fails < self.config.sub_config.search.tolerance:
                 # Keep searching up until success or failures accumulate to tolerance
                 for parent in taxo.get_superclasses(node):
@@ -459,7 +458,7 @@ class ICON:
                         queue.append((parent,fails+1))
                         to_cache.append(taxo.get_label(parent))
                 if to_cache:
-                    self.update_sub_score_cache((to_cache, [newlabel]*len(to_cache)))
+                    self.update_sub_score_cache(to_cache, [newlabel]*len(to_cache))
             elif self.config.sub_config.search.force_prune:
                 for ance in taxo.get_ancestors(node):
                     visited[ance] = True
