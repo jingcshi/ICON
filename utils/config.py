@@ -61,8 +61,9 @@ class icon_semiauto_config(tree_config):
 @dataclass
 class icon_manual_config(tree_config):
     input_concepts: List[str]=field(default_factory = list)
-    input_concept_bases: List[List[Union[int, str]]]=None
-
+    manual_concept_bases: List[List[Union[int, str]]] = None
+    auto_bases: bool = False
+    
 @dataclass
 class icon_ret_config(tree_config):
     retrieve_size: int = 10

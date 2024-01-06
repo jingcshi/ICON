@@ -84,7 +84,8 @@ class ICON:
                 max_outer_loop: int=None,
                 semiauto_seeds: List[Hashable]=[],
                 input_concepts: List[str]=[],
-                input_concept_bases: List[List[Hashable]]=None,
+                manual_concept_bases: List[List[Hashable]]=None,
+                auto_bases: bool=False,
                 rand_seed: Any=114514,
                 retrieve_size: int=10,
                 restrict_combinations: bool=True,
@@ -114,7 +115,7 @@ class ICON:
                                 rand_seed,
                                 _Config.icon_auto_config(max_outer_loop),
                                 _Config.icon_semiauto_config(semiauto_seeds),
-                                _Config.icon_manual_config(input_concepts,input_concept_bases),
+                                _Config.icon_manual_config(input_concepts,manual_concept_bases,auto_bases),
                                 _Config.icon_ret_config(retrieve_size,restrict_combinations),
                                 _Config.icon_gen_config(ignore_label,filter_subset),
                                 _Config.icon_sub_config(
@@ -174,136 +175,6 @@ class ICON:
         
         for arg, value in kwargs.items():
             self.config = _Config.Update_config(self.config, arg, value)
-
-    def run(self, **kwargs) -> Union[Taxonomy, dict]:
-        
-        self.update_config(**kwargs)
-        if self.config.rand_seed != None:
-            np.random.seed(self.config.rand_seed)
-            torch.manual_seed(self.config.rand_seed)
-        if not self.data:
-            raise ValueError('Missing input data')
-        self.status.working_taxo = self.data.copy()    
-        self.print_log(f'Loaded {self.data.__str__()}. Commencing enrichment', 1, 'system')
-        
-        self.status.outer_loop_count = 0
-        self.status.progress = np.array([0,0], dtype=int)
-        self.status.nextkey = max(hash(n) for n in self.status.working_taxo.nodes)+1 # Track the next ID in case of new class insertion
-        progress_bar = (isinstance(self.config.logging,bool) and self.config.logging) or (isinstance(self.config.logging,int) and self.config.logging >= 1) or (isinstance(self.config.logging,list) and 'progress_bar' in self.config.logging)
-        if progress_bar:
-            self.status.pbar_outer = tqdm(total = 1, position = 0)
-            self.status.pbar_inner = tqdm(total = 1, position = 1, leave=False) if self.config.mode in ['auto', 'semiauto'] else NullContext()
-        else:
-            self.status.pbar_outer = NullContext()
-            self.status.pbar_inner = NullContext()
-        
-        # Sample a random untouched bottom class as seed each cycle, or use the given seeds if provided
-        if self.config.mode == 'auto':
-            for model in self.models.leaf_fields():
-                if getattr(self.models, model) is None:
-                    raise ModuleNotFoundError(f'{model} is required to run auto mode')
-            self.auto()
-                            
-        elif self.config.mode == 'semiauto':
-            for model in self.models.leaf_fields():
-                if getattr(self.models, model) is None:
-                    raise ModuleNotFoundError(f'{model} is required to run semiauto mode')
-            self.semiauto()
-                            
-        else:
-            if self.models.sub_model is None:
-                raise ModuleNotFoundError(f'sub_model is required to run manual mode')
-            self.manual()
-        
-        suffix = ' with transitive reduction' if self.config.transitive_reduction else ''
-        progress_str = f' Added {Fore.BLACK}{Style.BRIGHT}{self.status.progress[0]}{Style.RESET_ALL} new classes and {Fore.BLACK}{Style.BRIGHT}{self.status.progress[1]}{Style.RESET_ALL} new direct subsumptions.' if self.config.update_config.do_update else ''
-        self.print_log(f'Enrichment complete.{progress_str} Begin post-processing{suffix}', 1, 'system')
-        if self.config.transitive_reduction:
-            tr = nx.transitive_reduction(self.status.working_taxo)
-            tr.add_nodes_from(self.status.working_taxo.nodes(data=True))
-            tr.add_edges_from((u, v, self.status.working_taxo.edges[u, v]) for u, v in tr.edges)
-            self.status.working_taxo = Taxonomy(tr)
-        self.status.working_taxo.add_edges_from((u, v, self.data.edges[u, v]) for u, v in self.data.edges)
-        
-        if self.config.update_config.do_update:
-            self.print_log(f'Return {self.status.working_taxo.__str__()}', 1, 'system')
-            return self.status.working_taxo
-        else:
-            self.print_log('Return ICON predictions', 1, 'system')
-            return self.status.logs
-        
-    def auto(self, **kwargs) -> None:
-        
-        self.update_config(**kwargs)
-        seedpool = self.status.working_taxo.get_LCA([],return_type=set)
-        poolsize = len(seedpool)
-        if not self.config.auto_config.max_outer_loop:
-            max_outer_loop = poolsize
-        else:
-            max_outer_loop = self.config.auto_config.max_outer_loop
-        if self.status.pbar_outer:
-            self.status.pbar_outer.reset(total=poolsize)
-            self.status.pbar_outer.set_description('Auto mode')
-            
-        with self.status.pbar_outer:
-            with self.status.pbar_inner:
-                while self.status.outer_loop_count < max_outer_loop and seedpool:
-                    candidates = list(seedpool)
-                    poolsize = len(candidates)
-                    seed = candidates[np.random.choice(poolsize,1).item()]
-                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {Fore.BLACK}{Style.BRIGHT}{poolsize}{Style.RESET_ALL} possible candidates', 2, 'cycle')
-                    self.status.outer_loop_count += 1
-                    outer_loop_progress, processed = self.outer_loop(seed)
-                    self.status.progress += outer_loop_progress
-                    seedpool = seedpool.difference(processed)
-                    if self.status.pbar_outer:
-                        new_poolsize = len(seedpool)
-                        diff = poolsize - new_poolsize
-                        poolsize = new_poolsize
-                        self.status.pbar_outer.update(diff)
-                        
-    def semiauto(self, **kwargs) -> None:
-        
-        self.update_config(**kwargs)
-        if not self.config.semiauto_config.semiauto_seeds:
-                raise ValueError('Please provide a list of seeds in semiauto mode')
-        if self.status.pbar_outer:
-            self.status.pbar_outer.reset(total=len(self.config.semiauto_config.semiauto_seeds))
-            self.status.pbar_outer.set_description('Semiauto mode')
-            
-        with self.status.pbar_outer:
-            with self.status.pbar_inner:
-                for seed in self.config.semiauto_config.semiauto_seeds:
-                    self.print_log(f'Ouer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL})', 2, 'cycle')
-                    self.status.outer_loop_count += 1
-                    outer_loop_progress, _ = self.outer_loop(seed)
-                    self.status.progress += outer_loop_progress
-                    if self.status.pbar_outer:
-                        self.status.pbar_outer.update()
-
-    def manual(self, **kwargs) -> None:
-        
-        self.update_config(**kwargs)
-        if not self.config.manual_config.input_concepts:
-            raise ValueError('Please provide a list of manual inputs in manual mode')
-        if not self.config.manual_config.input_concept_bases:
-            inputs_bases = [[]] * len(self.config.manual_config.input_concepts)
-        elif len(self.config.manual_config.input_concepts) != len(self.config.manual_config.input_concept_bases):
-            raise ValueError('Lengths of input_concepts and input_concept_bases must match')
-        else:
-            inputs_bases = self.config.manual_config.input_concept_bases
-        if self.status.pbar_outer:
-            self.status.pbar_outer.reset(total = len(self.config.manual_config.input_concepts))
-            self.status.pbar_outer.set_description('Manual mode')
-            
-        with self.status.pbar_outer:
-            for i, newlabel in enumerate(self.config.manual_config.input_concepts):
-                self.print_log(f'Input: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 3, 'iter')
-                self.status.outer_loop_count += 1
-                inner_loop_progress = self.inner_loop(newlabel, inputs_bases[i])
-                self.status.progress += inner_loop_progress
-                if self.status.pbar_outer:
-                    self.status.pbar_outer.update()
     
     def generate(self, base: Iterable[Hashable]) -> Optional[str]:
     
@@ -561,44 +432,6 @@ class ICON:
         
         return additions
     
-    def outer_loop(self, seed: Hashable) -> Tuple[np.ndarray, Set[Hashable]]:
-        
-        outer_loop_progress = np.array([0,0],dtype=int)
-    
-        # Retrieve a set of relevant classes from the KNN model, henceforce referred to as base_classes
-        base_classes = self.models.ret_model(self.status.working_taxo,seed,k=self.config.ret_config.retrieve_size)
-        self.print_log(f'Retrieved {Fore.BLACK}{Style.BRIGHT}{len(base_classes)}{Style.RESET_ALL} classes', 3, 'cycle_details')
-        for c in base_classes:
-            self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(c)}{Style.RESET_ALL}', 4, 'cycle_classlist')
-        
-        # Use base class pairs as prompt for the GEN model to generate new class names
-        if self.config.ret_config.restrict_combinations:
-            non_seed = base_classes.copy()
-            non_seed.remove(seed)
-            intermediate_concepts = [(seed, b) for b in non_seed]
-        else:
-            intermediate_concepts = list(combinations(base_classes, 2))
-        
-        if self.status.pbar_inner:
-            self.status.pbar_inner.reset(total = len(intermediate_concepts))
-            self.status.pbar_inner.set_description(f'Outer loop {self.status.outer_loop_count}')
-        for i,subset in enumerate(intermediate_concepts):
-            msg = f'Inner loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}.{i+1}{Style.RESET_ALL}: Combination ('
-            for b in subset:
-                msg += f'{Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(b)}{Style.RESET_ALL}, '
-            self.print_log(msg[:-2] + ')', 3, 'iter')
-            
-            newlabel = self.generate(subset)
-            if newlabel:
-                inner_loop_progress = self.inner_loop(newlabel, subset)
-                outer_loop_progress += inner_loop_progress
-            if self.status.pbar_inner:
-                self.status.pbar_inner.update()
-        
-        progress_str = f' Added {Fore.BLACK}{Style.BRIGHT}{outer_loop_progress[0]}{Style.RESET_ALL} new classes and {Fore.BLACK}{Style.BRIGHT}{outer_loop_progress[1]}{Style.RESET_ALL} new direct subsumptions.' if self.config.update_config.do_update else ''
-        self.print_log(f'Outer loop complete.{progress_str}', 2, 'cycle')
-        return outer_loop_progress, set(base_classes)
-    
     def inner_loop(self, newlabel: str, base: Iterable[Hashable]) -> np.ndarray:
     
         # Create search domain.
@@ -639,6 +472,7 @@ class ICON:
 
         if eqv:
             eqvc = list(eqv)[0]
+            eqv[eqvc] = self.config.update_config.eqv_score_func(eqv[eqvc])
             sup.pop(eqvc, None)
             sub.pop(eqvc, None)
             if not resolution:
@@ -648,4 +482,176 @@ class ICON:
             self.print_log(f'\t{Fore.GREEN}{Style.BRIGHT}Accepted{Style.RESET_ALL} as a new class by search', 3, 'iter')
         
         self.status.logs[newlabel] = {'equivalent': eqv, 'superclass': sup, 'subclass': sub}
-        return self.update_taxonomy(self.status.working_taxo,newlabel,eqv=eqvc,sup=list(sup),sub=list(sub)) if self.config.update_config.do_update else np.array([0,0], dtype=int)
+        return self.update_taxonomy(self.status.working_taxo,newlabel,eqv=eqvc,sup=list(sup),sub=list(sub)) if self.config.update_config.do_update else np.array([0,0], dtype=int)    
+    
+    def outer_loop(self, seed: Hashable) -> Tuple[np.ndarray, Set[Hashable]]:
+        
+        outer_loop_progress = np.array([0,0],dtype=int)
+    
+        # Retrieve a set of relevant classes from the KNN model, henceforce referred to as base_classes
+        base_classes = self.models.ret_model(self.status.working_taxo, self.status.working_taxo.get_label(seed), k=self.config.ret_config.retrieve_size)
+        self.print_log(f'Retrieved {Fore.BLACK}{Style.BRIGHT}{len(base_classes)}{Style.RESET_ALL} classes', 3, 'cycle_details')
+        for c in base_classes:
+            self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(c)}{Style.RESET_ALL}', 4, 'cycle_classlist')
+        
+        # Use base class pairs as prompt for the GEN model to generate new class names
+        if self.config.ret_config.restrict_combinations:
+            non_seed = base_classes.copy()
+            non_seed.remove(seed)
+            intermediate_concepts = [(seed, b) for b in non_seed]
+        else:
+            intermediate_concepts = list(combinations(base_classes, 2))
+        
+        if self.status.pbar_inner:
+            self.status.pbar_inner.reset(total = len(intermediate_concepts))
+            self.status.pbar_inner.set_description(f'Outer loop {self.status.outer_loop_count}')
+        for i,subset in enumerate(intermediate_concepts):
+            msg = f'Inner loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}.{i+1}{Style.RESET_ALL}: Combination ('
+            for b in subset:
+                msg += f'{Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(b)}{Style.RESET_ALL}, '
+            self.print_log(msg[:-2] + ')', 3, 'iter')
+            
+            newlabel = self.generate(subset)
+            if newlabel:
+                inner_loop_progress = self.inner_loop(newlabel, subset)
+                outer_loop_progress += inner_loop_progress
+            if self.status.pbar_inner:
+                self.status.pbar_inner.update()
+        
+        progress_str = f' Added {Fore.BLACK}{Style.BRIGHT}{outer_loop_progress[0]}{Style.RESET_ALL} new classes and {Fore.BLACK}{Style.BRIGHT}{outer_loop_progress[1]}{Style.RESET_ALL} new direct subsumptions.' if self.config.update_config.do_update else ''
+        self.print_log(f'Outer loop complete.{progress_str}', 2, 'cycle')
+        return outer_loop_progress, set(base_classes)
+    
+    def auto(self, **kwargs) -> None:
+        
+        self.update_config(**kwargs)
+        seedpool = self.status.working_taxo.get_LCA([],return_type=set)
+        poolsize = len(seedpool)
+        if not self.config.auto_config.max_outer_loop:
+            max_outer_loop = poolsize
+        else:
+            max_outer_loop = self.config.auto_config.max_outer_loop
+        if self.status.pbar_outer:
+            self.status.pbar_outer.reset(total=poolsize)
+            self.status.pbar_outer.set_description('Auto mode')
+            
+        with self.status.pbar_outer:
+            with self.status.pbar_inner:
+                while self.status.outer_loop_count < max_outer_loop and seedpool:
+                    candidates = list(seedpool)
+                    poolsize = len(candidates)
+                    seed = candidates[np.random.choice(poolsize,1).item()]
+                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {Fore.BLACK}{Style.BRIGHT}{poolsize}{Style.RESET_ALL} possible candidates', 2, 'cycle')
+                    self.status.outer_loop_count += 1
+                    outer_loop_progress, processed = self.outer_loop(seed)
+                    self.status.progress += outer_loop_progress
+                    seedpool = seedpool.difference(processed)
+                    if self.status.pbar_outer:
+                        new_poolsize = len(seedpool)
+                        diff = poolsize - new_poolsize
+                        poolsize = new_poolsize
+                        self.status.pbar_outer.update(diff)
+                        
+    def semiauto(self, **kwargs) -> None:
+        
+        self.update_config(**kwargs)
+        if not self.config.semiauto_config.semiauto_seeds:
+                raise ValueError('Please provide a list of seeds in semiauto mode')
+        if self.status.pbar_outer:
+            self.status.pbar_outer.reset(total=len(self.config.semiauto_config.semiauto_seeds))
+            self.status.pbar_outer.set_description('Semiauto mode')
+            
+        with self.status.pbar_outer:
+            with self.status.pbar_inner:
+                for seed in self.config.semiauto_config.semiauto_seeds:
+                    self.print_log(f'Ouer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL})', 2, 'cycle')
+                    self.status.outer_loop_count += 1
+                    outer_loop_progress, _ = self.outer_loop(seed)
+                    self.status.progress += outer_loop_progress
+                    if self.status.pbar_outer:
+                        self.status.pbar_outer.update()
+
+    def manual(self, **kwargs) -> None:
+        
+        self.update_config(**kwargs)
+        if not self.config.manual_config.input_concepts:
+            raise ValueError('Please provide a list of manual inputs in manual mode')
+        if self.config.manual_config.auto_bases: # Auto bases
+            inputs_bases = [self.models.ret_model(self.status.working_taxo, c, k=self.config.ret_config.retrieve_size) for c in self.config.manual_config.input_concepts]
+        elif not self.config.manual_config.manual_concept_bases: # No bases
+            inputs_bases = [[]] * len(self.config.manual_config.input_concepts)
+        elif len(self.config.manual_config.input_concepts) != len(self.config.manual_config.manual_concept_bases): # Manual bases mismatch
+            raise ValueError('Lengths of input_concepts and manual_concept_bases must match')
+        else: # Manual bases
+            inputs_bases = self.config.manual_config.manual_concept_bases
+        if self.status.pbar_outer:
+            self.status.pbar_outer.reset(total = len(self.config.manual_config.input_concepts))
+            self.status.pbar_outer.set_description('Manual mode')
+            
+        with self.status.pbar_outer:
+            for i, newlabel in enumerate(self.config.manual_config.input_concepts):
+                self.print_log(f'Input: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 3, 'iter')
+                self.status.outer_loop_count += 1
+                inner_loop_progress = self.inner_loop(newlabel, inputs_bases[i])
+                self.status.progress += inner_loop_progress
+                if self.status.pbar_outer:
+                    self.status.pbar_outer.update()
+
+    def run(self, **kwargs) -> Union[Taxonomy, dict]:
+        
+        self.update_config(**kwargs)
+        if self.config.rand_seed != None:
+            np.random.seed(self.config.rand_seed)
+            torch.manual_seed(self.config.rand_seed)
+        if not self.data:
+            raise ValueError('Missing input data')
+        self.status.working_taxo = self.data.copy()    
+        self.print_log(f'Loaded {self.data.__str__()}. Commencing enrichment', 1, 'system')
+        
+        self.status.outer_loop_count = 0
+        self.status.progress = np.array([0,0], dtype=int)
+        self.status.nextkey = max(hash(n) for n in self.status.working_taxo.nodes)+1 # Track the next ID in case of new class insertion
+        progress_bar = (isinstance(self.config.logging,bool) and self.config.logging) or (isinstance(self.config.logging,int) and self.config.logging >= 1) or (isinstance(self.config.logging,list) and 'progress_bar' in self.config.logging)
+        if progress_bar:
+            self.status.pbar_outer = tqdm(total = 1, position = 0)
+            self.status.pbar_inner = tqdm(total = 1, position = 1, leave=False) if self.config.mode in ['auto', 'semiauto'] else NullContext()
+        else:
+            self.status.pbar_outer = NullContext()
+            self.status.pbar_inner = NullContext()
+        
+        # Sample a random untouched bottom class as seed each cycle, or use the given seeds if provided
+        if self.config.mode == 'auto':
+            for model in self.models.leaf_fields():
+                if getattr(self.models, model) is None:
+                    raise ModuleNotFoundError(f'{model} is required to run auto mode')
+            self.auto()
+                            
+        elif self.config.mode == 'semiauto':
+            for model in self.models.leaf_fields():
+                if getattr(self.models, model) is None:
+                    raise ModuleNotFoundError(f'{model} is required to run semiauto mode')
+            self.semiauto()
+                            
+        else:
+            if self.models.sub_model is None:
+                raise ModuleNotFoundError(f'sub_model is required to run manual mode')
+            elif self.config.manual_config.auto_bases and self.models.ret_model is None:
+                raise ModuleNotFoundError(f'ret_model is required to run manual mode with auto_bases')
+            self.manual()
+        
+        suffix = ' with transitive reduction' if self.config.transitive_reduction else ''
+        progress_str = f' Added {Fore.BLACK}{Style.BRIGHT}{self.status.progress[0]}{Style.RESET_ALL} new classes and {Fore.BLACK}{Style.BRIGHT}{self.status.progress[1]}{Style.RESET_ALL} new direct subsumptions.' if self.config.update_config.do_update else ''
+        self.print_log(f'Enrichment complete.{progress_str} Begin post-processing{suffix}', 1, 'system')
+        if self.config.transitive_reduction:
+            tr = nx.transitive_reduction(self.status.working_taxo)
+            tr.add_nodes_from(self.status.working_taxo.nodes(data=True))
+            tr.add_edges_from((u, v, self.status.working_taxo.edges[u, v]) for u, v in tr.edges)
+            self.status.working_taxo = Taxonomy(tr)
+        self.status.working_taxo.add_edges_from((u, v, self.data.edges[u, v]) for u, v in self.data.edges)
+        
+        if self.config.update_config.do_update:
+            self.print_log(f'Return {self.status.working_taxo.__str__()}', 1, 'system')
+            return self.status.working_taxo
+        else:
+            self.print_log('Return ICON predictions', 1, 'system')
+            return self.status.logs
