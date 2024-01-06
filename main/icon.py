@@ -68,7 +68,7 @@ class NullContext:
             Post-processing
                 transitive_reduction: Whether to perform transitive reduction on the enriched taxonomy (all the taxonomy's original data will be preserved)
             Logging
-                log: Setting this on will allow the algorithm to print its procedure at the level specified. Useful for visualisation and debugging. Logging >= 1 will enable progress bar display. More details on logging available at the docstring of print_log
+                logging: Setting this on will allow the algorithm to print its procedure at the level specified. Useful for visualisation and debugging. Logging >= 1 will enable progress bar display. More details on logging available at the docstring of print_log
     '''
     
 class ICON:
@@ -101,7 +101,7 @@ class ICON:
                 eqv_score_func: Callable[[Tuple[float, float]], float]=lambda x: x[0]*x[1],
                 do_lexical_check: bool=True,
                 transitive_reduction: bool=True,
-                log: Union[bool, int, List[str]]=False,
+                logging: Union[bool, int, List[str]]=1
                 ) -> None:
         
         if isinstance(data,o2.Ontology):
@@ -122,7 +122,7 @@ class ICON:
                                     _Config.icon_search_config(threshold,tolerance,force_base_subsumptions,force_prune)),
                                 _Config.icon_update_config(do_update,eqv_score_func,do_lexical_check),
                                 transitive_reduction,
-                                log)
+                                logging)
         
         if data != None and do_lexical_check:
             self.load_lexical_cache(data)
@@ -163,7 +163,7 @@ class ICON:
     
     def print_log(self, msg: str, level: int, msgtype: str) -> Literal[0,1]:
         
-        setting = self.config.log
+        setting = self.config.logging
         if (isinstance(setting,bool) and setting == True) or (isinstance(setting,int) and setting >= level) or (isinstance(setting,list) and msgtype in setting):
             indent = max(level-1, 0)
             print('\t' * indent + msg)
@@ -175,7 +175,7 @@ class ICON:
         for arg, value in kwargs.items():
             self.config = _Config.Update_config(self.config, arg, value)
 
-    def run(self, **kwargs) -> Taxonomy:
+    def run(self, **kwargs) -> Union[Taxonomy, dict]:
         
         self.update_config(**kwargs)
         if self.config.rand_seed != None:
@@ -189,7 +189,7 @@ class ICON:
         self.status.outer_loop_count = 0
         self.status.progress = np.array([0,0], dtype=int)
         self.status.nextkey = max(hash(n) for n in self.status.working_taxo.nodes)+1 # Track the next ID in case of new class insertion
-        progress_bar = (isinstance(self.config.log,bool) and self.config.log) or (isinstance(self.config.log,int) and self.config.log >= 1) or (isinstance(self.config.log,list) and 'progress_bar' in self.config.log)
+        progress_bar = (isinstance(self.config.logging,bool) and self.config.logging) or (isinstance(self.config.logging,int) and self.config.logging >= 1) or (isinstance(self.config.logging,list) and 'progress_bar' in self.config.logging)
         if progress_bar:
             self.status.pbar_outer = tqdm(total = 1, position = 0)
             self.status.pbar_inner = tqdm(total = 1, position = 1, leave=False) if self.config.mode in ['auto', 'semiauto'] else NullContext()
@@ -225,9 +225,13 @@ class ICON:
             self.status.working_taxo = Taxonomy(tr)
         self.status.working_taxo.add_edges_from((u, v, self.data.edges[u, v]) for u, v in self.data.edges)
         
-        self.print_log(f'Return {self.status.working_taxo.__str__()}', 1, 'system')
-        return self.status.working_taxo
-    
+        if self.config.update_config.do_update:
+            self.print_log(f'Return {self.status.working_taxo.__str__()}', 1, 'system')
+            return self.status.working_taxo
+        else:
+            self.print_log('Return ICON predictions', 1, 'system')
+            return self.status.logs
+        
     def auto(self, **kwargs) -> None:
         
         self.update_config(**kwargs)
@@ -637,11 +641,11 @@ class ICON:
             eqvc = list(eqv)[0]
             sup.pop(eqvc, None)
             sub.pop(eqvc, None)
-            eqv = eqvc
             if not resolution:
                 self.print_log(f'\t{Fore.YELLOW}{Style.BRIGHT}Mapped{Style.RESET_ALL} to a known class by search', 3, 'iter')
         else:
-            eqv = None
+            eqvc = None
             self.print_log(f'\t{Fore.GREEN}{Style.BRIGHT}Accepted{Style.RESET_ALL} as a new class by search', 3, 'iter')
         
-        return self.update_taxonomy(self.status.working_taxo,newlabel,eqv=eqv,sup=list(sup),sub=list(sub)) if self.config.update_config.do_update else np.array([0,0], dtype=int)
+        self.status.logs[newlabel] = {'equivalent': eqv, 'superclass': sup, 'subclass': sub}
+        return self.update_taxonomy(self.status.working_taxo,newlabel,eqv=eqvc,sup=list(sup),sub=list(sub)) if self.config.update_config.do_update else np.array([0,0], dtype=int)
