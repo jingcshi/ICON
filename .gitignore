@@ -162,7 +162,7 @@ cython_debug/
 # VScode settings
 .vscode/
 
-# EBay data
+# Local corporate data
 *ebay*
 
 # Testing
