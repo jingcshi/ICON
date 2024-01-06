@@ -193,7 +193,7 @@ class ICON:
         progress_bar = (isinstance(self.config.log,bool) and self.config.log) or (isinstance(self.config.log,int) and self.config.log >= 1) or (isinstance(self.config.log,list) and 'progress_bar' in self.config.log)
         if progress_bar:
             self.status.pbar_outer = tqdm(total = 1, position = 0)
-            self.status.pbar_inner = tqdm(total = 1, position = 1, leave=False)
+            self.status.pbar_inner = tqdm(total = 1, position = 1, leave=False) if self.config.mode in ['auto', 'semiauto'] else NullContext()
         else:
             self.status.pbar_outer = NullContext()
             self.status.pbar_inner = NullContext()
@@ -239,7 +239,8 @@ class ICON:
         else:
             max_outer_loop = self.config.auto_config.max_outer_loop
         if self.status.pbar_outer:
-            self.status.pbar_outer.reset(total=poolsize, desc='Auto mode')
+            self.status.pbar_outer.reset(total=poolsize)
+            self.status.pbar_outer.set_description('Auto mode')
             
         with self.status.pbar_outer:
             with self.status.pbar_inner:
@@ -247,7 +248,7 @@ class ICON:
                     candidates = list(seedpool)
                     poolsize = len(candidates)
                     seed = candidates[np.random.choice(poolsize,1).item()]
-                    self.print_log(f'Cycle {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {Fore.BLACK}{Style.BRIGHT}{poolsize}{Style.RESET_ALL} possible candidates', 2, 'cycle')
+                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {Fore.BLACK}{Style.BRIGHT}{poolsize}{Style.RESET_ALL} possible candidates', 2, 'cycle')
                     self.status.outer_loop_count += 1
                     outer_loop_progress, processed = self.outer_loop(seed)
                     self.status.progress += outer_loop_progress
@@ -264,12 +265,13 @@ class ICON:
         if not self.config.semiauto_config.semiauto_seeds:
                 raise ValueError('Please provide a list of seeds in semiauto mode')
         if self.status.pbar_outer:
-            self.status.pbar_outer.reset(total=len(self.config.semiauto_config.semiauto_seeds), desc='Semiauto mode')
+            self.status.pbar_outer.reset(total=len(self.config.semiauto_config.semiauto_seeds))
+            self.status.pbar_outer.set_description('Semiauto mode')
             
         with self.status.pbar_outer:
             with self.status.pbar_inner:
                 for seed in self.config.semiauto_config.semiauto_seeds:
-                    self.print_log(f'Cycle {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL})', 2, 'cycle')
+                    self.print_log(f'Ouer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL})', 2, 'cycle')
                     self.status.outer_loop_count += 1
                     outer_loop_progress, _ = self.outer_loop(seed)
                     self.status.progress += outer_loop_progress
@@ -288,13 +290,14 @@ class ICON:
         else:
             inputs_bases = self.config.manual_config.input_concept_bases
         if self.status.pbar_outer:
-            self.status.pbar_outer.reset(total = len(self.config.manual_config.input_concepts), desc='Manual mode')
+            self.status.pbar_outer.reset(total = len(self.config.manual_config.input_concepts))
+            self.status.pbar_outer.set_description('Manual mode')
             
         with self.status.pbar_outer:
-            for newlabel in self.config.manual_config.input_concepts:
+            for i, newlabel in enumerate(self.config.manual_config.input_concepts):
                 self.print_log(f'Input: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 3, 'iter')
                 self.status.outer_loop_count += 1
-                inner_loop_progress = self.inner_loop(newlabel, inputs_bases)
+                inner_loop_progress = self.inner_loop(newlabel, inputs_bases[i])
                 self.status.progress += inner_loop_progress
                 if self.status.pbar_outer:
                     self.status.pbar_outer.update()
@@ -354,7 +357,7 @@ class ICON:
             top = taxo.get_GCD([])
         queue = deque([(n,0) for n in top])
         if top:
-            self.update_sub_score_cache([newlabel]*len(top), [taxo.get_label(top)])
+            self.update_sub_score_cache(([newlabel]*len(top), taxo.get_label(top)))
         visited = {}
 
         while queue:
@@ -387,7 +390,7 @@ class ICON:
                         queue.append((child,0))
                         to_cache.append(taxo.get_label(child))
                 if to_cache:
-                    self.update_sub_score_cache([newlabel]*len(to_cache), to_cache)
+                    self.update_sub_score_cache(([newlabel]*len(to_cache), to_cache))
             elif fails < self.config.sub_config.search.tolerance:
                 for child in taxo.get_subclasses(node):
                     if child not in visited:
@@ -395,7 +398,7 @@ class ICON:
                         queue.append((child,fails+1))
                         to_cache.append(taxo.get_label(child))
                 if to_cache:
-                    self.update_sub_score_cache([newlabel]*len(to_cache), to_cache)
+                    self.update_sub_score_cache(([newlabel]*len(to_cache), to_cache))
             elif self.config.sub_config.search.force_prune:
                 for desc in taxo.get_descendants(node):
                     visited[desc] = True
@@ -415,7 +418,7 @@ class ICON:
         bottom = taxo.get_LCA([])
         queue = deque([(n,0) for n in bottom])
         if bottom:
-            self.update_sub_score_cache([taxo.get_label(bottom)], [newlabel]*len(bottom))
+            self.update_sub_score_cache((taxo.get_label(bottom), [newlabel]*len(bottom)))
         # The redundant superclasses are also logically certain to be non-subclasses, so we do not search on them
         visited = {k:True for k in sup_ancestors}
         
@@ -448,7 +451,7 @@ class ICON:
                         queue.append((parent,0))
                         to_cache.append(taxo.get_label(parent))
                 if to_cache:
-                    self.update_sub_score_cache(to_cache, [newlabel]*len(to_cache))
+                    self.update_sub_score_cache((to_cache, [newlabel]*len(to_cache)))
             elif fails < self.config.sub_config.search.tolerance:
                 # Keep searching up until success or failures accumulate to tolerance
                 for parent in taxo.get_superclasses(node):
@@ -456,7 +459,7 @@ class ICON:
                         queue.append((parent,fails+1))
                         to_cache.append(taxo.get_label(parent))
                 if to_cache:
-                    self.update_sub_score_cache(to_cache, [newlabel]*len(to_cache))
+                    self.update_sub_score_cache((to_cache, [newlabel]*len(to_cache)))
             elif self.config.sub_config.search.force_prune:
                 for ance in taxo.get_ancestors(node):
                     visited[ance] = True
@@ -489,7 +492,7 @@ class ICON:
 
         # Clean up the superclass / subclass sets. We only want to add the most specific superclasses and most general subclasses
         sup = taxo.reduce_subset(sup)
-        sub = taxo.reduce_subset(sub,reverse=True)
+        sub = taxo.reduce_subset(sub, reverse=True)
             
         # Case 1: Merge with a known equivalent class    
         if eqv:
@@ -505,6 +508,7 @@ class ICON:
         else:
             if taxo.add_node(self.status.nextkey,label=new) == 0:
                 self.print_log(f'{Fore.GREEN}{Style.BRIGHT}Created{Style.RESET_ALL} new class {Fore.CYAN}{Style.BRIGHT}{new}{Style.RESET_ALL} with key {Fore.BLACK}{Style.BRIGHT}{self.status.nextkey}{Style.RESET_ALL}', 4, 'iter_details')
+                self.update_lexical_cache(self.status.nextkey, new)
                 selfclass = self.status.nextkey
                 self_color = Fore.CYAN
                 self_label = new
@@ -573,7 +577,8 @@ class ICON:
             intermediate_concepts = list(combinations(base_classes, 2))
         
         if self.status.pbar_inner:
-            self.status.pbar_inner.reset(total = len(intermediate_concepts), desc=f'Outer loop {self.status.outer_loop_count}')
+            self.status.pbar_inner.reset(total = len(intermediate_concepts))
+            self.status.pbar_inner.set_description(f'Outer loop {self.status.outer_loop_count}')
         for i,subset in enumerate(intermediate_concepts):
             msg = f'Inner loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}.{i+1}{Style.RESET_ALL}: Combination ('
             for b in subset:
