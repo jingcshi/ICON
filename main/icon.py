@@ -15,6 +15,9 @@ from utils.breadcrumb import tokenset
 import utils.config as _Config
 
 class NullContext:
+    '''
+    Dummy replacement for a progress bar environment.
+    '''
     
     def __init__(self):
         pass
@@ -24,54 +27,159 @@ class NullContext:
         pass
     def __bool__(self):
         return False
-
-    '''
-    Self-supervised taxonomy enrichment system.
-    This system uses a seed class to retrieve a cluster of closely related classes, in order to zoom in on a small facet of the taxonomy. It enumerates subsets of the cluster and uses a text generative model to create a virtual concept that is expected to represent the common parent for each subset. The generated concept will go through a series of valiadations and its placement in the taxonomy will be decided by a search based on pairwise subsumption prediction. The outcome for each validated concept will be either a new class inserted to the taxonomy, or a merger with existing class(es). The taxonomy is being updated dynamically each step. The cycle can be applied iteratively with different seeds to perform more comprehensive enrichment.
-
-    The algorithm depends on three (and one optional) plug-in models:
-    KNN_model(taxonomy, Class) -> List[Class]: Retrieve the classes most closely related with the input class in the input taxonomy
-    GEN_model(List[str]) -> str: Generate the common parent label for an arbitrary set of class labels
-    SUB_model(List[Class],List[Class]) -> float: Predict whether one class subsumes another, and should support batching
-
-    Args:
-        Required:
-            data: The taxonomy to enrich. If an ontology is given, the taxonomy will be created from it.
-            knn_model, gen_model, sub_model: Plugin models as described above
-        Options:
-            Overall control
-                mode: Select one of the following
-                    'auto': The system will automatically enrich the entire taxonomy without supervision
-                    'semiauto': The system will enrich the taxonomy with the seeds specified by user input
-                    'manual': The system will try to place the new concepts specified by user input directly into the taxonomy
-                max_outer_loop: Maximal number of cycles allowed. Used for auto mode.
-                semiauto_seeds: An iterable of classes in the taxonomy from which to kick off enrichment. Used for semiauto mode.
-                manual_inputs: An iterable of new concept labels to be placed in the taxonomy. Used for manual mode.
-                rand_seed: Leave untouched or set a number to ensure reproducibility. Set to None to disable.
-            Class retrieval
-                retrieve_size: Number of relevant classes to retrieve from the KNN model
-                restrict_combinations: Whether to limit the class combinations to only those including the seed class
-            Label generation
-                ignore_label: The set of outputs which indicate the GEN model's rejection to generate a common parent label
-            Search domain
-                subgraph_crop: Whether to limit the search domain to the descendants of the LCA of the classes which are used to generate the new concept (henceforth referred to as the base classes)
-                subgraph_force: If provided (type: list of list of labels), the search domain will always include the LCA of base classes w.r.t. the sub-taxonomy defined by the edges whose labels are in each list of the input. Will not take effect if subgraph_crop = False
-                subgraph_strict: Whether to further limit the search domain to the subsumers of base classes
-                subs_threshold: The model's minimal predicted probability for accepting subsumption
-            Search
-                search_tolerance: Maximal depth to continue searching a branch that has been rejected by subsumption test before pruning branch
-                force_known_subsumptions: Whether to force the search to place the new class at least as general as the LCA of the seed classes used by GEN model, and at least as specific as the union of the seed classes 
-                    Enabling this will also force the search to stop at the seed classes
-                force_prune_branches: Whether to force the search to reject all subclasses of a tested non-superclass in superclass search, and to reject all superclasses of a tested non-subclass in subclass search
-                    Enabling this will slow down the search if the taxonomy is roughly tree-like
-                eqv_score_func: If the model predicts that query both subsumes and is subsumed by another class, this function will be used to calculate the overall likelihood of equivalence given the two likelihoods for each subsumption. Default is the product of two likelihoods.
-            Post-processing
-                transitive_reduction: Whether to perform transitive reduction on the enriched taxonomy (all the taxonomy's original data will be preserved)
-            Logging
-                logging: Setting this on will allow the algorithm to print its procedure at the level specified. Useful for visualisation and debugging. Logging >= 1 will enable progress bar display. More details on logging available at the docstring of print_log
-    '''
     
 class ICON:
+    '''
+    A self-supervised taxonomy enrichment system designed for implicit taxonomy completion.
+    
+    ICON works by representing new concepts with combinations of existing concepts. It uses a seed to retrieve a cluster of closely related concepts, in order to zoom in on a small facet of the taxonomy. It then enumerates subsets of the cluster and uses a generative model to create a virtual concept that is expected to represent the union for each subset. The generated concept will go through a series of valiadations and its placement in the taxonomy will be decided by a search based on subsumption prediction. The outcome for each validated concept will be either a new concept inserted to the taxonomy, or a merger with existing concepts. The taxonomy is being updated dynamically each step.
+
+    Dependencies:
+    
+        ICON depends on the following packages:
+        
+            numpy, torch, owlready2, networkx, tqdm, nltk, colorama
+            
+        The pipeline for training sub-models that we provide in this README further depends on the following packages:
+        
+            transformers, datasets, evaluate, info_nce
+    
+    Usage:
+    
+        Preliminaries:
+        
+            The simplest usage of ICON is with Jupyter notebook. Before initialising an ICON object, make sure you have your data and three dependent sub-models.
+            
+                data: A taxonomy (taxo_utils.Taxonomy object, which can be loaded from json via taxo_utils.from_json, for details see the File IO Format section) or an OWL ontology (owlready2.Ontology object)
+                
+                ret_model (recommended signature: ret_model(taxo: Taxonomy, query: str, k: int, *args, **kwargs) -> List[Hashable]): Retrieve the top-k concepts most closely related with the query concept in a taxonomy
+                
+                gen_model (recommended signature: gen_model(labels: List[str], *args, **kwargs) -> str): Generate the union label for an arbitrary set of concept labels
+                
+                sub_model (recommended signature: sub_model(sub: Union[str, List[str]], sup: Union[str, List[str]], *args, **kwargs) -> numpy.ndarray): Predict whether each sup subsumes the corresponding sub given two lists of sub and sup
+
+            The sub-models are essential plug-ins for ICON. Everything above (except ret_model or gen_model if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
+            
+        I don't have these models
+        
+            We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and well-known pretrained language models to obtain the three required models.
+            
+            Open each notebook under /data_wrangling and follow the instructions to build the training data for each sub-model using your taxonomy (or the Google PT taxonomy placed there by default). You should get two files under /data/ret, /data/gen and /data/sub each. One of them is for training and the other for evaluation.
+            
+            Next, download the pretrained language models from HuggingFace. Let's use BERT for both ret_model and sub_model, and T5 for gen_model.
+            
+            Finally, fine-tune each pretrained model using the corresponding notebook under /model_training . Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at /demo.ipynb.
+        
+        Running ICON
+            
+            Once you are ready, initialise an ICON object with your preferred configurations. If you just want to see ICON at work, use all the default configurations by e.g. iconobj = ICON() followed by iconobj.run() (this will trigger auto mode, see below). However, a complete list of configurations is provided as follows:
+
+                mode: Select one of the following
+                    
+                    'auto': The system will automatically enrich the entire taxonomy without supervision.
+                    
+                    'semiauto': The system will enrich the taxonomy with the seeds specified by user input.
+                    
+                    'manual': The system will try to place the new concepts specified by user input directly into the taxonomy. Does not require gen_model.
+                
+                logging: How much you want to see ICON reporting its progress. Set to 0 or False to suppress all logging. Set to 1 if you want to see a progress bar and some brief updates. Set to True if you want to hear basically everything!
+
+                    Other possible values for this argument include integers from 2 to 5 (5 is currently equivalent to True), and a list of message types.
+                    
+                rand_seed: If provided, this will be passed to numpy and torch as the random seed. Use this to ensure reproducibility.
+                
+                transitive_reduction: Whether to perform transitive reduction on the outcome taxonomy, which will make sure it's in its simplest form with no redundancy.
+                
+                Auto mode config:
+                
+                    max_outer_loop: Maximal number of outer loops allowed.
+                    
+                Semiauto mode config:
+                
+                    semiauto_seeds: An iterable of concepts that will be used as seed for each outer loop.
+                    
+                Manual mode config:
+                
+                    input_concepts: An iterable of new concept labels to be placed in the taxonomy.
+                    
+                    manual_concept_bases: If provided, each entry will become the search bases for the corresponding input concept.
+                    
+                    auto_bases: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, ret_model will not be required.
+                    
+                Retrieval config:
+                
+                    retrieve_size: The number of concepts ret_model will retrieve for each query. This will be passed to ret_model as the argument named k.
+                    
+                    restrict_combinations: Whether you want restrict the subsets under consideration to those including the seed concept.
+                    
+                Generation config:
+                
+                    ignore_label: The set of output labels that indicate the gen_model's rejection to generate an union label
+                    
+                    filter_subsets: Whether you want the gen_model to skip the subsets that have trivial LCAs. That is, the LCAs of the set form a subset of it.
+                    
+                Concept placement config:
+                
+                    Search domain constraints:
+                    
+                        subgraph_crop: Whether to limit the search domain to the descendants of the LCAs of the concepts which are used to generate the new concept (referred to as search bases in this documentation).
+
+                        subgraph_force: If provided (type: list of list of labels), the search domain will always include the LCAs of search bases w.r.t. the sub-taxonomy defined by the edges whose labels are in each list of the input. Will not take effect if subgraph_crop = False
+                        
+                        subgraph_strict: Whether to further limit the search domain to the subsumers of at least one base concept
+                        
+                    Search:
+                    
+                        threshold: The sub_model's minimal predicted probability for accepting subsumption
+                        
+                        tolerance: Maximal depth to continue searching a branch that has been rejected by subsumption test before pruning branch
+                        
+                        force_known_subsumptions: Whether to force the search to place the new concept at least as general as the LCA of the search bases, and at least as specific as the union of the search bases. Enabling this will also force the search to stop at the search bases.
+                        
+                        force_prune_branches: Whether to force the search to reject all subclasses of a tested non-superclass in superclass search, and to reject all superclasses of a tested non-subclass in subclass search. Enabling this will slow down the search if the taxonomy is roughly tree-like
+                    
+                Taxonomy update config:
+                
+                    do_update: Whether you would like to actually update the taxonomy. If set to True, running ICON will return the enriched taxonomy. Otherwise, running ICON will return the records of its predictions in a dictionary.
+                    
+                    eqv_score_func: When ICON is updating taxonomies, it's sometimes necessary to estimate the likelihood of a=b where a and b are two concepts, given the likelihoods of a subsuming b and b subsuming a. This argument is therefore a function that crunches two probabilities together to estimate the intersection probability. It's usually fine to leave it as default, which is the multiplication operation.
+                    
+                    do_lexical_check: Whether you would like to run a simple lexical screening for each new concept to see if it coincides with any existing concept. If set to True, ICON will have to pre-compute and cache the lexical features for each concept in the taxonomy when initialising.
+                    
+            Once you figure out your desired configurations and have initialised an ICON object, you can run ICON by simply calling run(). If you want to change configurations, simply do
+            
+                iconobj.update_config(**your_new_config)
+                
+            For instance,
+            
+                iconobj.update_config(threshold=0.9, ignore_label=iconobj.config.gen_config.ignore_label + ['Owl:Thing'])
+                
+            The outcome will either be the enriched taxonomy or a record of ICON's predictions. You can save a taxonomy by your_taxo_object.to_json(your_path, **your_kwargs).
+    
+    File IO format:
+    
+        ICON reads and writes taxonomies in a designated JSON format. In particular, the files are expected to have:
+        
+            Two arrays "nodes" and "edges"
+        
+                "nodes" contains a list of node objects. Each node object contains the following fields:
+                
+                    Mandatory field "id": The ID of the node. ID 0 is always reserved for the root node and should be avoided.
+                    
+                    Mandatory field "label": The name / surface form of the node.
+                    
+                    Any other fields will be stored as node attributes.
+                    
+                "edges" contains a list of edge objects. Each edge object contains the following fields:
+                
+                    Mandatory field "src": The ID of the child node.
+                    
+                    Mandatory field "tgt": The ID of the parent node.
+                    
+                    Any other fields will be stored as edge attributes.
+        
+        While the only attribute ICON explicitly uses for each node or edge is "label", you can store other attributes, for instance node term embeddings, as additional fields. These attributes will be stored in Taxonomy objects.
+    '''
     
     def __init__(self,
                 data: Union[Taxonomy,o2.Ontology]=None,
@@ -104,7 +212,81 @@ class ICON:
                 transitive_reduction: bool=True,
                 logging: Union[bool, int, List[str]]=1
                 ) -> None:
-        
+        '''
+        Initialise an ICON object. The following arguments can be acknowledged:
+
+            mode: Select one of the following
+                
+                'auto': The system will automatically enrich the entire taxonomy without supervision.
+                
+                'semiauto': The system will enrich the taxonomy with the seeds specified by user input.
+                
+                'manual': The system will try to place the new concepts specified by user input directly into the taxonomy. Does not require gen_model.
+            
+            logging: How much you want to see ICON reporting its progress. Set to 0 or False to suppress all logging. Set to 1 if you want to see a progress bar and some brief updates. Set to True if you want to hear basically everything!
+
+                Other possible values for this argument include integers from 2 to 5 (5 is currently equivalent to True), and a list of message types.
+                
+            rand_seed: If provided, this will be passed to numpy and torch as the random seed. Use this to ensure reproducibility.
+            
+            transitive_reduction: Whether to perform transitive reduction on the outcome taxonomy, which will make sure it's in its simplest form with no redundancy.
+            
+            Auto mode config:
+            
+                max_outer_loop: Maximal number of outer loops allowed.
+                
+            Semiauto mode config:
+            
+                semiauto_seeds: An iterable of concepts that will be used as seed for each outer loop.
+                
+            Manual mode config:
+            
+                input_concepts: An iterable of new concept labels to be placed in the taxonomy.
+                
+                manual_concept_bases: If provided, each entry will become the search bases for the corresponding input concept.
+                
+                auto_bases: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, ret_model will not be required.
+                
+            Retrieval config:
+            
+                retrieve_size: The number of concepts ret_model will retrieve for each query. This will be passed to ret_model as the argument named k.
+                
+                restrict_combinations: Whether you want restrict the subsets under consideration to those including the seed concept.
+                
+            Generation config:
+            
+                ignore_label: The set of output labels that indicate the gen_model's rejection to generate an union label
+                
+                filter_subsets: Whether you want the gen_model to skip the subsets that have trivial LCAs. That is, the LCAs of the set form a subset of it.
+                
+            Concept placement config:
+            
+                Search domain constraints:
+                
+                    subgraph_crop: Whether to limit the search domain to the descendants of the LCAs of the concepts which are used to generate the new concept (referred to as search bases in this documentation).
+
+                    subgraph_force: If provided (type: list of list of labels), the search domain will always include the LCAs of search bases w.r.t. the sub-taxonomy defined by the edges whose labels are in each list of the input. Will not take effect if subgraph_crop = False
+                    
+                    subgraph_strict: Whether to further limit the search domain to the subsumers of at least one base concept
+                    
+                Search:
+                
+                    threshold: The sub_model's minimal predicted probability for accepting subsumption
+                    
+                    tolerance: Maximal depth to continue searching a branch that has been rejected by subsumption test before pruning branch
+                    
+                    force_known_subsumptions: Whether to force the search to place the new concept at least as general as the LCA of the search bases, and at least as specific as the union of the search bases. Enabling this will also force the search to stop at the search bases.
+                    
+                    force_prune_branches: Whether to force the search to reject all subclasses of a tested non-superclass in superclass search, and to reject all superclasses of a tested non-subclass in subclass search. Enabling this will slow down the search if the taxonomy is roughly tree-like
+                
+            Taxonomy update config:
+            
+                do_update: Whether you would like to actually update the taxonomy. If set to True, running ICON will return the enriched taxonomy. Otherwise, running ICON will return the records of its predictions in a dictionary.
+                
+                eqv_score_func: When ICON is updating taxonomies, it's sometimes necessary to estimate the likelihood of a=b where a and b are two concepts, given the likelihoods of a subsuming b and b subsuming a. This argument is therefore a function that crunches two probabilities together to estimate the intersection probability. It's usually fine to leave it as default, which is the multiplication operation.
+                
+                do_lexical_check: Whether you would like to run a simple lexical screening for each new concept to see if it coincides with any existing concept. If set to True, ICON will have to pre-compute and cache the lexical features for each concept in the taxonomy when initialising.
+        '''
         if isinstance(data,o2.Ontology):
             data = Taxonomy.from_ontology(data)
         self.data = data
@@ -126,13 +308,13 @@ class ICON:
                                 logging)
         
         if data != None and do_lexical_check:
-            self.load_lexical_cache(data)
+            self.load_lexical_cache(data) # May take some time loading the lexical features
         
     def load_lexical_cache(self, data: Taxonomy) -> None:
         
         with tqdm(total = data.number_of_nodes(), leave=False, desc='Loading lexical cache') as pbar:
             for n,l in data.nodes(data='label'):
-                # The dictionary used for NIL entity check. Keys are hash values of tokenised and lemmatised class labels
+                # The dictionary used for lexical check. Keys are hash values of tokenised and lemmatised class labels
                 self.caches.lexical_cache[hash(tuple(tokenset(l)))] = n
                 pbar.update()
     
@@ -153,7 +335,7 @@ class ICON:
     
     def update_sub_score_cache(self, sub: List[str], sup: List[str]) -> None:
         
-        # The model output is expected to be a numpy.array of shape [len(keypair)]
+        # The model output is expected to be a numpy.array of shape [len(sub)]
         outputs = self.models.sub_model(sub, sup)
         for i,s in enumerate(outputs):
             self.caches.sub_score_cache[(sub[i], sup[i])] = s.item()
@@ -177,11 +359,12 @@ class ICON:
             self.config = _Config.Update_config(self.config, arg, value)
     
     def generate(self, base: Iterable[Hashable]) -> Optional[str]:
-    
+        
+        if self.config.gen_config.filter_subset:
         # Skip if the LCA is already in base
-        if self.status.working_taxo.get_LCA(base,return_type=set).issubset(set(base)):
-            self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Skipped{Style.RESET_ALL} because a trivial LCA exists', 3, 'iter')
-            return None
+            if self.status.working_taxo.get_LCA(base,return_type=set).issubset(set(base)):
+                self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Skipped{Style.RESET_ALL} because a trivial LCA exists', 3, 'iter')
+                return None
 
         # Generate new CP label
         newlabel = self.models.gen_model([self.status.working_taxo.get_label(b) for b in base])
@@ -202,13 +385,7 @@ class ICON:
         Args:
             taxo: The search domain. Does not have to be the full taxonomy
             newlabel: Concept to insert
-            model: Subsumption prediction model. Should accept input params in the shape of (subclass:str,superclass:str)
             base: The seed classes (represented by keys) used to generate the newlabel. Has effect only if force_known=True
-            threshold: The model's minimal predicted probability for accepting subsumption, should be in range [0,1]
-            tolerance: Maximal depth to continue searching a branch that has been rejected by subsumption test before pruning branch
-            force_known: Whether to force the new class to be no more general than the LCA of base, and no more specific than the union of base
-            force_prune: Whether to force the search to reject all subclasses of a tested non-superclass in superclass search, and to reject all superclasses of a tested non-subclass in subclass search
-                Enabling this will slow down the search if the taxonomy is roughly tree-like
 
         Output:
             sup, sub, eqv: The model's expected optimal superclasses, subclasses and equivalent classes of query
@@ -352,8 +529,7 @@ class ICON:
         Args:
             taxo: The taxonomy to update
             new: The new concept to be dealt with
-            newkey: The key to be used to identify the newly inserted class. If not provided then default to merging with an existing class (which requires eqv)
-            eqv: An existing class which the new concept should be equivalent with. If not provided then default to inserting new class (which requires newkey)
+            eqv: An existing class which the new concept should be equivalent with.
             sup, sub: Lists which the new class is supposed to be subsumed by / subsume
 
         Return the count of new class / direct subsumptions in a np.array([class_count,subsumption_count])
@@ -590,9 +766,18 @@ class ICON:
             
         with self.status.pbar_outer:
             for i, newlabel in enumerate(self.config.manual_config.input_concepts):
-                self.print_log(f'Input: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 3, 'iter')
+                self.print_log(f'Input: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 2, 'cycle')
                 self.status.outer_loop_count += 1
-                inner_loop_progress = self.inner_loop(newlabel, inputs_bases[i])
+                base = inputs_bases[i]
+                if base == []:
+                    self.print_log('No search base available', 3, 'iter')
+                else:
+                    plural_str = 'es' if len(base) > 1 else ''
+                    self.print_log(f'Search will be based on the following class{plural_str}:', 3, 'iter')
+                    for b in base:
+                        self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(b)}{Style.RESET_ALL}', 4, 'cycle_classlist')
+                        
+                inner_loop_progress = self.inner_loop(newlabel, base)
                 self.status.progress += inner_loop_progress
                 if self.status.pbar_outer:
                     self.status.pbar_outer.update()

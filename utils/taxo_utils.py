@@ -11,24 +11,38 @@ import numpy as np
 reID = re.compile(r'\d+')
 reIRI = re.compile(r'#(.*)$')
 
-# Taxonomies are directed acyclic graphs, with additional methods implemented to facilitate taxonomic operations
-# One special attribute 'label' should be used exclusively for the surface forms of taxons, as downstream algorithms depend on it
-# All node keys should be int or str
-# All edges (u,v) are assumed to be subClassOf relations, meaning u is a subclass / hyponym of v
-
 class Taxonomy(nx.DiGraph):
+    '''
+    Class for taxonomy as used in ICON.
     
-    def __init__(self, *args, **kw) -> None:
+    A Taxonomy object is a directed acyclic graph (netwokx.DiGraph), with additional methods implemented to facilitate taxonomic operations.
+
+        One special attribute 'label' should be used exclusively for the surface forms of concepts, as downstream method depend on it.
         
+        The node key 0 is reserved for the root node and should not be re-defined for other nodes.
+        
+    All edges (u,v) are assumed to be subClassOf relations, meaning u is a subclass / hyponym of v.
+    '''
+    def __init__(self, *args, **kw) -> None:
+        '''
+        Define a Taxonomy object.
+        
+        Usage of this method is the same as netwokx.DiGraph.__init__, as no additional arguments are being processed.
+        '''
         super().__init__(*args, **kw)
     
-    # Overrides the default NetworkX add_node method, adding return values
-    # Return values:
-        # 0 if new node successfully inserted
-        # 2 if node already exists, but the attributes are updated
-        # 1 if no action could be done
     def add_node(self, node_for_adding: Hashable, **attr) -> Literal[0,1,2]:
+        '''
+        Add a node to the taxonomy. Similar to networkx.DiGraph.add_node but adding return values.
         
+        Interpretation of return values:
+        
+            0 if the new node is successfully inserted.
+            
+            1 if no action could be done.
+            
+            2 if the node already exists, but the attributes are updated.
+        '''
         if node_for_adding not in self._succ:
             if node_for_adding is None:
                 raise ValueError("None cannot be a node")
@@ -43,14 +57,20 @@ class Taxonomy(nx.DiGraph):
         else:
             return 1
     
-    # Overrides the default NetworkX add_edge method, checking for cycles and adding return values
-    # Return values:
-        # 0 if new edge successfully inserted
-        # 1 if edge already exists, but the attributes are updated
-    # Raises ValueError if the relevant nodes are None
-    # Raises TypeError if the edge to be added would cause a cycle
     def add_edge(self, u_of_edge: Hashable, v_of_edge: Hashable, **attr) -> Literal[0,1]:
+        '''
+        Add an edge (u, v) to the taxonomy. Similar to networkx.DiGraph.add_edge but adding return values.
         
+        Interpretation of return values:
+        
+            0 if the new edge is successfully inserted.
+            
+            1 if the edge already exists, in which case the attributes are updated.
+            
+        Raises ValueError if the at least one of the relevant nodes is None.
+        
+        Raises TypeError if the edge to be added would cause a cycle, which would lead to a logical contradiction from a taxonomy's perspective.
+        '''
         u, v = u_of_edge, v_of_edge
         # add nodes
         if u not in self._succ:
@@ -66,7 +86,7 @@ class Taxonomy(nx.DiGraph):
             self._pred[v] = self.adjlist_inner_dict_factory()
             self._node[v] = self.node_attr_dict_factory()
         # add the edge
-        if u == v or v in self.get_descendants(u):
+        if self.subsumes(u, v):
             raise TypeError('Edge not added because it would cause a cycle')
         return_value = 1 if v in self._succ[u] else 0 
         datadict = self._adj[u].get(v, self.edge_attr_dict_factory())
@@ -75,9 +95,12 @@ class Taxonomy(nx.DiGraph):
         self._pred[v][u] = datadict
         return return_value
     
-    # Overrides the default NetworkX remove_node method
-    def remove_node(self, n: Hashable) -> None:
+    def remove_node(self, n: Hashable) -> None:        
+        '''
+        Delete a node from the taxonomy. Similar to networkx.DiGraph.remove_node.
         
+        Deleting a node will also remove all the edges attached to it.
+        '''        
         try:
             nbrs = self._succ[n]
             del self._node[n]
@@ -89,49 +112,65 @@ class Taxonomy(nx.DiGraph):
         for u in self._pred[n]:
             del self._succ[u][n]  # remove all edges n-u in digraph
         del self._pred[n]  # remove node from pred
-            
-    # Overrides the default NetworkX remove_edge method
-    def remove_edge(self, u: Hashable, v: Hashable) -> None:
         
+    def remove_edge(self, u: Hashable, v: Hashable) -> None:
+        '''
+        Delete an edge from the taxonomy. Similar to networkx.DiGraph.remove_edge.
+        '''     
         try:
             del self._succ[u][v]
             del self._pred[v][u]
         except KeyError as err:
             raise nx.NetworkXError(f"The edge {u}-{v} not in graph.") from err
 
-    # All the direct superclasses of n, returning in either list or set
-        # If labels (iterable) is specified, then only return the nodes that subsume the input node via one of the given labels
     def get_superclasses(self, n: Hashable, labels: Iterable[str]=[], return_type: Union[Type[List[Hashable]], Type[Set[Hashable]]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find all the direct superclasses of n, returning as either a list or a set.
         
+        If labels (an iterable of acceptable labels) is specified, then the output will be limited to those that connect to n via an edge labelled by one of the given labels.
+        
+            This would effectively be the superclasses of n in a particular subgraph of the taxonomy specified by the edge label restrictions.
+        '''     
         try:
             succ = self._succ[n]
         except KeyError as err:
             raise nx.NetworkXError(f"The node {n} is not in the digraph.") from err
-        if labels:
+        if labels is not []:
             try:
                 succ = {n:attr for n,attr in succ.items() if attr['label'] in labels}
             except KeyError as err:
                 raise nx.NetworkXError("Node label not specified") from err
         return return_type(succ.keys())
     
-    # All the direct subclasses of n, returning in either list or set
-        # If labels (iterable) is specified, then only return the nodes that are subsumed by the input node via one of the given labels
     def get_subclasses(self, n: Hashable, labels:Iterable[str]=[], return_type: Union[Type[List[Hashable]], Type[Set[Hashable]]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find all the direct subclasses of n, returning as either a list or a set.
         
+        For interpretation and usage of the labels parameter, see the docstring for get_superclasses.
+        '''        
         try:
             pred = self._pred[n]
         except KeyError as err:
             raise nx.NetworkXError(f"The node {n} is not in the digraph.") from err
-        if labels:
+        if labels is not []:
             try:
                 pred = {n:attr for n,attr in pred.items() if attr['label'] in labels}
             except KeyError as err:
                 raise nx.NetworkXError("Node label not specified") from err
         return return_type(pred.keys())
     
-    # Ancestors are transitive superclasses. Does NOT include the node itself
     def get_ancestors(self, node: Hashable, labels: Iterable[str]=[], return_type: Union[Type[List[Hashable]], Type[Set[Hashable]]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find all the ancestors of n, returning as either a list or a set.
         
+        An ancestor is a node reachable from n by a sequence of superclass relations.
+        
+        The results does NOT include n itself.
+        
+        The labels parameter is similar to its counterpart in get_superclasses(). Here it is being used to restrict ancestorship iteratively.
+        
+            This would effectively be the ancestors of n in a particular subgraph of the taxonomy specified by the edge label restrictions.
+        '''        
         queue = deque([node])
         visited = {node}
         answer = {}
@@ -144,9 +183,16 @@ class Taxonomy(nx.DiGraph):
                     queue.append(succ)
         return return_type(answer.keys())
     
-    # Descendants are transitive subclasses. Does NOT include the node itself
     def get_descendants(self, node: Hashable, labels: Iterable[str]=[], return_type: Union[Type[List[Hashable]], Type[Set[Hashable]]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find all the descendants of n, returning as either a list or a set.
         
+        A descendant is a node reachable from n by a sequence of subclass relations.
+        
+        The results does NOT include n itself.
+        
+        For interpretation and usage of the labels parameter, see the docstring for get_ancestors.
+        '''                
         queue = deque([node])
         visited = {node}
         answer = {}
@@ -159,9 +205,12 @@ class Taxonomy(nx.DiGraph):
                     queue.append(pred)
         return return_type(answer.keys())
     
-    # Similar to get_ancestors but allow the specification of max distance to the query node.
     def get_ancestors_by_depth(self, node: Hashable, max_depth:int=1, labels: Iterable[str]=[], return_type: Union[Type[List[Hashable]], Type[Set[Hashable]]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find all the ancestors of n up to max_depth steps away from n.
         
+        Similar to get_ancestors.
+        '''          
         queue = deque([(node,0)])
         visited = {node}
         answer = {}
@@ -178,7 +227,11 @@ class Taxonomy(nx.DiGraph):
     
     # Similar to get_descendants but allow the specification of max distance to the query node.
     def get_descendants_by_depth(self, node: Hashable, max_depth: int=1, labels: Iterable[str]=[], return_type:Union[Type[List[Hashable]], Type[Set[Hashable]]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find all the descendants of n up to max_depth steps away from n.
         
+        Similar to get_descendants.
+        '''                  
         queue = deque([(node,0)])
         visited = {node}
         answer = {}
@@ -193,9 +246,12 @@ class Taxonomy(nx.DiGraph):
                     queue.append((pred,d+1))
         return return_type(answer.keys())
     
-    # Check if u subsumes v.
     def subsumes(self, u: Hashable, v: Hashable, labels: Iterable[str]=[]) -> bool:
+        '''
+        Check if one node u subsumes another node v. Subsumption is defined as either u == v or u is an ancestor of v.
         
+        For interpretation and usage of the labels parameter, see the docstring for get_ancestors.
+        '''                        
         queue = deque([u])
         visited = {u}
         while queue:
@@ -207,16 +263,24 @@ class Taxonomy(nx.DiGraph):
                     visited.add(pred)
                     queue.append(pred)
         return False
-    
-    # Node label getter. May raise KeyError
+
     def get_label(self, node: Union[Hashable, List[Hashable]]) -> Union[str, List[str]]:
+        '''
+        Node label getter. Inputs can be either a node or a list of nodes. In the latter case the outputs will be a list of labels.
+        
+        May raise KeyError.
+        '''
         
         if isinstance(node,list):
             return [self._node[n]['label'] for n in node]
         return self._node[node]['label']
     
-    # Node label setter
     def set_label(self, node: Union[Hashable, List[Hashable]], label: Union[str, List[str]]) -> None:
+        '''
+        Node label setter. Inputs can be either a node with label or a list of nodes with labels.
+        
+        If a queried node is missing from the taxonomy, then this node will be automatically added with its intended label and no edge attached.
+        '''
         
         if isinstance(node,list):
             for i,n in enumerate(node):
@@ -224,21 +288,35 @@ class Taxonomy(nx.DiGraph):
         else:
             self.add_node(node, label=label)
     
-    # Edge label getter. May raise KeyError
     def get_edge_label(self, u: Hashable, v: Hashable) -> str:
+        '''
+        Edge label getter.
+        
+        May raise KeyError.
+        '''
         
         return self._succ[u][v]['label']
     
-    # Edge label setter
     def set_edge_label(self, u: Hashable, v: Hashable, label: str) -> None:
+        '''
+        Edge label setter.
         
+        If a queried edge is missing from the taxonomy, then this edge will be automatically added with its intended label.
+            
+            This may also lead to the addition of relevant nodes if either u or v is missing.
+        '''
         self.add_edge(u,v,label=label)
     
-    # Find the minimal subset of a set of nodes by transitive subsumption reduction
-        # If reverse = False, select the nodes that do not subsume any other nodes in the input (bottom nodes)
-        # If reverse = True, select the nodes that are not subsumed by any other nodes in the input (top nodes)
     def reduce_subset(self, subset: Iterable[Hashable], labels: Iterable[str]=[], reverse:bool=False, return_type:Union[Type[list], Type[set]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find the minimal subset of a set of nodes by transitive subsumption reduction. Returning as either a list or a set.
         
+        If reverse = False, this method will select the nodes that do not subsume any other nodes in the input (bottom nodes).
+            
+        Otherwise, it will select the nodes that are not subsumed by any other nodes in the input (top nodes).
+        
+        For interpretation and usage of the labels parameter, see the docstring for get_superclasses.
+        '''
         if not subset:
             return return_type([])
         if reverse:
@@ -251,13 +329,20 @@ class Taxonomy(nx.DiGraph):
                 subset.remove(n)
         return return_type(subset)
     
-    # Least Common Ancestor (LCA) of the input nodes (iterable with arbitrary size), these are the nodes that:
-        # Subsume all inputs (definition for Common Ancestor (CA))
-        # Do not subsume any other CA
-    # If input is empty, returns all the bottom nodes in the graph
-    # Returns either a list or a set
     def get_LCA(self, nodes: Iterable[Hashable], labels: Iterable[str]=[], return_type:Union[Type[list], Type[set]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find the Least Common Ancestors (LCA) of the input nodes (iterable with arbitrary size). Returning as either a list or a set.
         
+        An LCA is any node that satisfy the following:
+            
+            1. It subsumes all of the input nodes (definition for Common Ancestor, CA)
+            
+            2. It does not subsume any other CA
+        
+        When the input is empty, it returns the bottom nodes of the entire taxonomy.
+        
+        For interpretation and usage of the labels parameter, see the docstring for get_superclasses.
+        '''        
         if not nodes:
             return return_type([k for k,v in self._pred.items() if not v])
         nodes = set(nodes)
@@ -280,13 +365,20 @@ class Taxonomy(nx.DiGraph):
                 queue.append((succ,colours[n]))
         return self.reduce_subset(CA,labels=labels,return_type=return_type)
     
-    # Greatest Common Descendant (GCD) of the input nodes (iterable with arbitrary size), these are the nodes that:
-        # Is subsumed by all inputs (definition for Common Descendant (CD))
-        # Is not subsumed by any other CD
-    # If input is empty, returns all the top nodes in the graph
-    # Returns either a list or a set
     def get_GCD(self, nodes: Iterable[Hashable], labels: Iterable[str]=[], return_type:Union[Type[list], Type[set]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find the Greatest Common Descendants (GCD) of the input nodes (iterable with arbitrary size). Returning as either a list or a set.
         
+        An GCD is any node that satisfy the following:
+            
+            1. It is subsumed by all of the input nodes (definition for Common Descendant, CD)
+            
+            2. It is not subsumed by any other CD
+            
+        When the input is empty, it returns the top nodes of the entire taxonomy.
+        
+        For interpretation and usage of the labels parameter, see the docstring for get_superclasses.
+        '''        
         if not nodes:
             return return_type([k for k,v in self._succ.items() if not v])
         nodes = set(nodes)
@@ -309,12 +401,18 @@ class Taxonomy(nx.DiGraph):
                 queue.append((succ,colours[n]))
         return self.reduce_subset(CD,labels=labels,reverse=True,return_type=return_type)
 
-    # Create a subgraph of the current graph that are considered 'relevant' to the input nodes (base)
-        # If crop_top = True, the subgraph will be limited to the descendants of the LCA of base. Otherwise the subgraph will start from the global top nodes
-        # If force_labels (list of list of labels) is provided, the top of subgraph will always include the LCA of base w.r.t. each set of the input edge labels from force_labels
-        # If strict = True, the subgraph will exclude any class that do not subsume at least one base class
     def create_subgraph(self, base: Iterable[Hashable], crop_top: bool=True, force_labels: Optional[List[List[str]]]=None, strict: bool=False) -> Taxonomy:
+        '''
+        Create a sub-taxonomy of the current taxonomy made of nodes that are considered "above" the input nodes (base). These are by default the nodes that are not subsumed by any of the nodes in base.
         
+        If crop_top = True, the subgraph will be bounded above by the LCAs of base. Otherwise the subgraph will be bounded above by the global top nodes.
+        
+        If force_labels (list of list of labels) is provided, the top of subgraph will always include the LCA of base w.r.t. each set of the input edge labels from force_labels.
+        
+            For details on the LCA w.r.t. a restricted set of labels, see the docstring for get_superclasses and get_LCA.
+            
+        If strict = True, the subgraph will exclude any class that do not subsume at least one base class.
+        '''    
         if not base:
             return self.copy()
         subgraph = Taxonomy()
@@ -353,31 +451,57 @@ class Taxonomy(nx.DiGraph):
                 queue.append(sub)
         return subgraph
     
-    # The iri is assumed to be of the form baseiri/name#clsid
-    # This method extracts clsid from the iri, the clsid is always interpreted as *int* type
-    def link_iri(self,iri: str) -> int:
+    def transitive_reduction(self) -> Taxonomy:
+        '''
+        Returns the transitive reduction of a taxonomy.
         
+        Based on the networkx.transitive_reduction method.
+        '''
+        tr = nx.transitive_reduction(self)
+        tr.add_nodes_from(self.nodes(data=True))
+        tr.add_edges_from((u, v, self.edges[u, v]) for u, v in tr.edges)
+        return Taxonomy(tr)
+    
+    def link_iri(self, iri: str) -> int:
+        '''
+        Search for a node in the taxonomy by its IRI in an ontology. The IRI is assumed to be of the form baseiri/name#clsid.
+        
+        When this method extracts clsid from the iri, the clsid is always interpreted as *int* type
+        '''    
         clsid = int(re.findall(reIRI,iri)[0])
         if clsid in self.nodes:
             return clsid
         else:
             raise KeyError(f'{clsid}')
     
-    # Save the taxonomy to a JSON file at file_path.
-    # The file will the following format:
-        # Two arrays "nodes" and "edges"
-            # "nodes" contains a list of node objects. Each node object contains the following fields:
-                # "id": The ID of the node. The root concept (ID 0) will be omitted.
-                # "label": The name / surface form of the node.
-                # Any other node attributes.
-            # "edges" contains a list of edge objects. Each edge object contains the following fields:
-                # "src": The ID of the parent concept.
-                # "tgt": The ID of the child concept.
-                # Any other edge attributes.
-    # Any keyword arguments will be passed to the json.dump() method.
-        # For instance, setting indent=4 will result in prettier formatting.   
     def to_json(self, file_path: Union[str, os.PathLike], **kwargs) -> None:
+        '''
+        Save the taxonomy to a JSON file at file_path.
         
+        The file will the following format:
+        
+            Two arrays "nodes" and "edges"
+            
+                "nodes" contains a list of node objects. Each node object contains the following fields:
+                
+                    "id": The ID of the node. The root node (ID 0) will be omitted.
+                    
+                    "label": The name / surface form of the node.
+                    
+                    Any other node attributes.
+                    
+                "edges" contains a list of edge objects. Each edge object contains the following fields:
+                
+                    "src": The ID of the parent node.
+                    
+                    "tgt": The ID of the child node.
+                    
+                    Any other edge attributes.
+                    
+        Any keyword arguments will be passed to the json.dump() method.
+        
+            For instance, passing indent=4 will result in prettier formatting.  
+        '''
         class NpEncoder(json.JSONEncoder):
             def default(self, obj):
                 if isinstance(obj, np.integer):
@@ -393,20 +517,32 @@ class Taxonomy(nx.DiGraph):
         with open(file_path, 'w') as outf:
             outf.write(json.dumps(obj, cls=NpEncoder, **kwargs))
 
-# Load the taxonomy from a JSON-like file_path.
-    # The file should have the following format:
-    # Two arrays "nodes" and "edges"
-        # "nodes" contains a list of node objects. Each node object contains the following fields:
-            # Mandatory field "id": The ID of the node. ID 0 is always reserved for the root concept and should be avoided.
-            # Mandatory field "label": The name / surface form of the node.
-            # Any other fields will be stored as node attributes.
-        # "edges" contains a list of edge objects. Each edge object contains the following fields:
-            # Mandatory field "src": The ID of the child concept.
-            # Mandatory field "tgt": The ID of the parent concept.
-            # Any other fields will be stored as edge attributes.
-    # The root concept will always be created and any node with no parents specified in the file will be considered children of the root. These added edges will be given the label "auto".
 def from_json(file_path: Union[str, os.PathLike]) -> Taxonomy:
+    '''
+    Load the taxonomy from a JSON-like file_path.
     
+    The file should have the following format:
+    
+    Two arrays "nodes" and "edges"
+    
+        "nodes" contains a list of node objects. Each node object contains the following fields:
+        
+            Mandatory field "id": The ID of the node. ID 0 is always reserved for the root node and should be avoided.
+            
+            Mandatory field "label": The name / surface form of the node.
+            
+            Any other fields will be stored as node attributes.
+            
+        "edges" contains a list of edge objects. Each edge object contains the following fields:
+        
+            Mandatory field "src": The ID of the child node.
+            
+            Mandatory field "tgt": The ID of the parent node.
+            
+            Any other fields will be stored as edge attributes.
+            
+    The root node will always be created and any node with no parents specified in the file will be considered children of the root. These added edges will be given the label "auto".
+    '''
     with open(file=file_path) as inf:
         obj = json.load(inf)
     taxo = Taxonomy()
@@ -426,17 +562,21 @@ def from_json(file_path: Union[str, os.PathLike]) -> Taxonomy:
         tgt = e.pop('tgt')
         taxo.add_edge(src,tgt,**e)
     L1_nodes = taxo.get_GCD([])
-    taxo.add_node(0,label='Root Concept')
+    taxo.add_node(0,label='Root Node')
     for l1 in L1_nodes:
         taxo.add_edge(l1, 0, label='auto')
     return taxo
 
-# Extract the taxonomy from the partial order of named subsumptions (subClassOf) of an Ontology
-    # Tracks *edges* recursively downward from owl.Thing (which will be assigned the key zero)
-    # Extracted edges will be labelled 'original' in the taxonomy
-    # Ignore all information other than the first label of each class and subClassOf relations
 def from_ontology(onto: o2.Ontology) -> Taxonomy:
+    '''
+    Extract the taxonomy from the partial order of named subsumptions (subClassOf) of an Ontology.
     
+    This method works by tracking edges recursively downward from owl.Thing (which will be assigned the key 0).
+    
+    Extracted edges will be labelled 'original' in the taxonomy.
+    
+    All informations of the ontology other than the IRIs of classes, the first label of each class and the subClassOf relations, will be ignored.
+    '''
     taxo = Taxonomy()
     with onto:
         visited = {}
@@ -448,7 +588,7 @@ def from_ontology(onto: o2.Ontology) -> Taxonomy:
             visited[(newiri, superiri)] = True
             if newclass == o2.Thing:
                 node_id = 0
-                node_label = 'Root Concept'
+                node_label = 'Root Node'
             else:
                 node_id = int(re.findall(reIRI,newiri)[0])
                 node_label = newclass.label[0]
