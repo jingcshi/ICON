@@ -59,7 +59,7 @@ Please note that this is only a suggestion for the sub-models and deploying late
     
 ### Running ICON
         
-Once you are ready, initialise an ICON object with your preferred configurations. If you just want to see ICON at work, use all the default configurations by e.g. `iconobj = ICON()` followed by `iconobj.run()` (this will trigger auto mode, see below). A complete list of configurations is provided as follows:
+Once you are ready, initialise an ICON object with your preferred configurations. If you just want to see ICON at work, use all the default configurations by e.g. `iconobj = ICON(data=your_data, ret_model=your_ret_model, gen_model=your_gen_model, sub_model=your_sub_model)` followed by `iconobj.run()` (this will trigger auto mode, see below). A complete list of configurations is provided as follows:
 
 - `mode`: Select one of the following
         
