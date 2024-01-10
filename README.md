@@ -16,6 +16,7 @@ ICON depends on the following packages:
 - `networkx`
 - `tqdm`
 - `nltk`
+- `simcse`
 - `colorama`
         
 The pipeline for training sub-models that we provide in this README further depends on the following packages:
