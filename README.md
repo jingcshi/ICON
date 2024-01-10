@@ -41,7 +41,7 @@ The simplest usage of ICON is with Jupyter notebook. Before initialising an ICON
 
 The sub-models are essential plug-ins for ICON. Everything above (except `ret_model` or `gen_model` if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
 
-*Replace simcse `tool.py`*. Due to the original SimCSE package displaying some outputs that's unnecessary for ICON's purposes, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py` in order to suppress these outputs.
+*Replace simcse* `tool.py`. Due to the original SimCSE package displaying some outputs that's unnecessary for ICON's purposes, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py` in order to suppress these outputs.
         
 ### Sub-models
     
