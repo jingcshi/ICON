@@ -2,7 +2,7 @@
 
 A self-supervised taxonomy enrichment system designed for implicit taxonomy completion.
     
-ICON works by representing new concepts with combinations of existing concepts. It uses a seed to retrieve a cluster of closely related concepts, in order to zoom in on a small facet of the taxonomy. It then enumerates subsets of the cluster and uses a generative model to create a virtual concept that is expected to represent the union for each subset. The generated concept will go through a series of valiadations and its placement in the taxonomy will be decided by a search based on subsumption prediction. The outcome for each validated concept will be either a new concept inserted to the taxonomy, or a merger with existing concepts. The taxonomy is being updated dynamically each step.
+ICON works by representing new concepts with combinations of existing concepts. It uses a seed to retrieve a cluster of closely related concepts, in order to zoom in on a small facet of the taxonomy. It then enumerates subsets of the cluster and uses a generative model to create a virtual concept for each subset that is expected to represent the subset's semantic union. The generated concept will go through a series of valiadations and its placement in the taxonomy will be decided by a search based on a sequence of subsumption tests. The outcome for each validated concept will be either a new concept inserted into the taxonomy, or a merger with existing concepts. The taxonomy is being updated dynamically each step.
 
 ![system-diagram](/assets/diagrams/system.png "Flowchart of ICON")
 
