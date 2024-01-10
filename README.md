@@ -140,8 +140,22 @@ For instance,
 `iconobj.update_config(threshold=0.9, ignore_label=iconobj.config.gen_config.ignore_label + ['Owl:Thing'])`
 
 Would set the subsumption prediction threshold to 0.9, and add `'Owl:Thing'` to the list of ignored generated labels.
-    
-The outcome of an ICON run will either be the enriched taxonomy or a record of ICON's predictions. You can save a taxonomy by `your_taxo_object.to_json(your_path, **your_kwargs)`.
+
+### Interpreting the outputs
+
+The outcome of an ICON run will either be the enriched taxonomy or a record of ICON's predictions.
+In the former case, you can save a taxonomy by `your_taxo_object.to_json(your_path, **your_kwargs)`. In the latter case, the record will be a Python dictionary in the form of 
+    {concept_name1:
+        {'eqv': eqv_1,
+        'sup': sup_1,
+        'sub': sub_1},
+    concept_name2:
+        {'eqv': eqv_2,
+        'sup': sup_2,
+        'sub': sub_2},
+    ...
+    }
+Where each `eqv` is either empty or a single key-value pair `label: score` with the predicted equivalent concept and its confidence score. Likewise, each `sup` and `sub` is either empty or a dictionary of such key-value pairs, but potentially including more than one concept.
 
 ## File IO format
 
