@@ -144,7 +144,8 @@ Would set the subsumption prediction threshold to 0.9, and add `'Owl:Thing'` to 
 ### Interpreting the outputs
 
 The outcome of an ICON run will either be the enriched taxonomy or a record of ICON's predictions.
-In the former case, you can save a taxonomy by `your_taxo_object.to_json(your_path, **your_kwargs)`. In the latter case, the record will be a Python dictionary in the form of 
+In the former case, you can save a taxonomy by `your_taxo_object.to_json(your_path, **your_kwargs)`. In the latter case, the record will be a Python dictionary in the form of
+
     {concept_name1:
         {'eqv': eqv_1,
         'sup': sup_1,
