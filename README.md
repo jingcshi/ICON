@@ -123,14 +123,14 @@ Once you are ready, initialise an ICON object with your preferred configurations
             
         - `force_prune_branches`: Whether to force the search to reject all subclasses of a tested non-superclass in superclass search, and to reject all superclasses of a tested non-subclass in subclass search. Enabling this will slow down the search if the taxonomy is roughly tree-like.
         
-    - Taxonomy update config:
+- Taxonomy update config:
     
-        - `do_update`: Whether you would like to actually update the taxonomy. If set to `True`, running ICON will return the enriched taxonomy. Otherwise, running ICON will return the records of its predictions in a dictionary.
-        
-        - `eqv_score_func`: When ICON is updating taxonomies, it's sometimes necessary to estimate the likelihood of $a=b$ where $a$ and $b$ are two concepts, given the likelihoods of $a \sqsubseteq b$ (b subsumes a) and $b \sqsubseteq a$. This argument is therefore a function that crunches two probabilities together to estimate the intersection probability. It's usually fine to leave it as default, which is the multiplication operation.
-        
-        - `do_lexical_check`: Whether you would like to run a simple lexical screening for each new concept to see if it coincides with any existing concept. If set to `True`, ICON will have to pre-compute and cache the lexical features for each concept in the taxonomy when initialising.
-        
+    - `do_update`: Whether you would like to actually update the taxonomy. If set to `True`, running ICON will return the enriched taxonomy. Otherwise, running ICON will return the records of its predictions in a dictionary.
+    
+    - `eqv_score_func`: When ICON is updating taxonomies, it's sometimes necessary to estimate the likelihood of $a=b$ where $a$ and $b$ are two concepts, given the likelihoods of $a \sqsubseteq b$ (b subsumes a) and $b \sqsubseteq a$. This argument is therefore a function that crunches two probabilities together to estimate the intersection probability. It's usually fine to leave it as default, which is the multiplication operation.
+    
+    - `do_lexical_check`: Whether you would like to run a simple lexical screening for each new concept to see if it coincides with any existing concept. If set to `True`, ICON will have to pre-compute and cache the lexical features for each concept in the taxonomy when initialising.
+    
 Once you figure out your desired configurations and have initialised an ICON object, you can run ICON by simply calling `run()`. If you want to change configurations, simply do
 
 `iconobj.update_config(**your_new_config)`
