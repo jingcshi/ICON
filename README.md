@@ -181,4 +181,4 @@ Two arrays `"nodes"` and `"edges"`
                 
     - Any other fields will be stored as edge attributes.
     
-While the only attribute ICON explicitly uses for each node or edge is `"label"`, you can store other attributes, for instance node term embeddings, as additional fields. These attributes will be stored in `Taxonomy` objects.
+While the only attribute ICON explicitly uses for each node or edge is `"label"`, you can store other attributes, for instance node term embeddings, as additional fields. These attributes will be stored in `Taxonomy` objects. An example file can be found in the data directory [here](/data/raw/google.json).
