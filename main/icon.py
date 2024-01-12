@@ -11,8 +11,8 @@ import networkx as nx
 from tqdm.notebook import tqdm
 from colorama import Fore, Style
 from utils.taxo_utils import Taxonomy
-from utils.breadcrumb import tokenset
-import utils.config as _Config
+from ICON.utils.tokenset_utils import tokenset
+import ICON.main.config as _Config
 
 class NullContext:
     '''

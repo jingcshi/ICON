@@ -43,8 +43,6 @@ The simplest usage of ICON is with Jupyter notebook. Before initialising an ICON
 - `sub_model` (recommended signature: `sub_model(sub: Union[str, List[str]], sup: Union[str, List[str]], *args, **kwargs) -> numpy.ndarray)`: Predict whether each `sup` subsumes the corresponding `sub` given two lists of `sub` and `sup`
 
 The sub-models are essential plug-ins for ICON. Everything above (except `ret_model` or `gen_model` if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
-
-*Replace simcse* `tool.py`: Due to the original SimCSE package displaying some loggings and progress bars that's unnecessary for ICON's purposes, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py` in order to suppress these outputs.
         
 ### Sub-models
     
@@ -55,6 +53,8 @@ First, open each notebook under `/data_wrangling` and follow the instructions to
 Next, download the pretrained language models from HuggingFace. Here we use [BERT](https://huggingface.co/bert-base-cased) for both ret_model and sub_model, and [T5](https://huggingface.co/t5-base) for gen_model.
 
 Finally, fine-tune each pretrained model using the corresponding notebook under `/model_training`. Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at `/demo.ipynb`.
+
+*Replace simcse* `tool.py`: If you wish to use the `RET_model` template from `/demo.ipynb`, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py`. The original SimCSE package displaying some loggings and progress bars that's unnecessary for ICON's purposes, and the file replacement would suppress these outputs without affecting other functionalities.
 
 Please note that this is only a suggestion for the sub-models and deploying later models may be able to enhance ICON performances.
     
