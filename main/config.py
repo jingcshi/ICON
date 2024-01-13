@@ -77,7 +77,7 @@ class icon_gen_config(tree_config):
 @dataclass
 class icon_subgraph_config(tree_config):
     subgraph_crop: bool = True
-    subgraph_force: List[List[str]]=field(default_factory = list)
+    subgraph_force: List[List[str]] = field(default_factory = list)
     subgraph_strict: bool = True
 
 @dataclass

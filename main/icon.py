@@ -9,10 +9,10 @@ import numpy as np
 import owlready2 as o2
 import networkx as nx
 from tqdm.notebook import tqdm
-from colorama import Fore, Style
+from main.log_style import Fore, Style
 from utils.taxo_utils import Taxonomy
-from ICON.utils.tokenset_utils import tokenset
-import ICON.main.config as _Config
+from utils.tokenset_utils import tokenset
+import main.config as _Config
 
 class NullContext:
     '''
@@ -200,7 +200,7 @@ class ICON:
                 ignore_label: List[str]=['','All categories','Root Concept','Thing','Allcats','Everything','root'],
                 filter_subset: bool=True,
                 subgraph_crop: bool=True,
-                subgraph_force: List[List[str]]=[['original']],
+                subgraph_force: List[List[str]]=[['auto', 'original']],
                 subgraph_strict: bool=True,
                 threshold: float=0.5,
                 tolerance: int=0,

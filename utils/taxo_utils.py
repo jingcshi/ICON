@@ -135,7 +135,7 @@ class Taxonomy(nx.DiGraph):
             succ = self._succ[n]
         except KeyError as err:
             raise nx.NetworkXError(f"The node {n} is not in the digraph.") from err
-        if labels is not []:
+        if labels != []:
             try:
                 succ = {n:attr for n,attr in succ.items() if attr['label'] in labels}
             except KeyError as err:
@@ -152,7 +152,7 @@ class Taxonomy(nx.DiGraph):
             pred = self._pred[n]
         except KeyError as err:
             raise nx.NetworkXError(f"The node {n} is not in the digraph.") from err
-        if labels is not []:
+        if labels != []:
             try:
                 pred = {n:attr for n,attr in pred.items() if attr['label'] in labels}
             except KeyError as err:
@@ -562,7 +562,7 @@ def from_json(file_path: Union[str, os.PathLike]) -> Taxonomy:
         tgt = e.pop('tgt')
         taxo.add_edge(src,tgt,**e)
     L1_nodes = taxo.get_GCD([])
-    taxo.add_node(0,label='Root Node')
+    taxo.add_node(0, label='Root Concept')
     for l1 in L1_nodes:
         taxo.add_edge(l1, 0, label='auto')
     return taxo
