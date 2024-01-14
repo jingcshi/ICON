@@ -44,7 +44,9 @@ The simplest usage of ICON is with Jupyter notebook. Before initialising an ICON
 The sub-models are essential plug-ins for ICON. Everything above (except `ret_model` or `gen_model` if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
         
 ### Sub-models
-    
+
+*eBay internal*: Models fine-tuned on eBay data with the pipeline described below are available at RNO: `/user/jingcshi/ICON_models`.
+
 We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and well-known pretrained language models to obtain the three required models.
 
 First, open each notebook under `/data_wrangling` and follow the instructions to build the training data for each sub-model using your taxonomy (or the Google PT taxonomy placed there by default). You should get two files under `/data/ret`, `/data/gen` and `/data/sub` each. One of them is for training and the other for evaluation.
