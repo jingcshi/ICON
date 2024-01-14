@@ -45,7 +45,7 @@ The sub-models are essential plug-ins for ICON. Everything above (except `ret_mo
         
 ### Sub-models
 
-eBay internal: Models fine-tuned on eBay data with the pipeline described below are available at RNO: `/user/jingcshi/ICON_models`.
+**eBay models**: Models fine-tuned on eBay data with the pipeline described below are available at RNO: `/user/jingcshi/ICON_models`.
 
 We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and well-known pretrained language models to obtain the three required models.
 
