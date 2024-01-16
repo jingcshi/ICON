@@ -31,7 +31,7 @@ Current dependency conflicts suggest that ICON runs best with Python 3.8.
 
 ### Preliminaries
     
-The simplest usage of ICON is with Jupyter notebook. An walkthrough tutorial is provided at [`demo.ipynb`](/demo.ipynb). Before initialising an ICON object, make sure you have your data and three dependent sub-models.
+The simplest usage of ICON is with Jupyter notebook. A walkthrough tutorial is provided at [`demo.ipynb`](/demo.ipynb). Before initialising an ICON object, make sure you have your data and three dependent sub-models.
         
 - `data`: A taxonomy (`taxo_utils.Taxonomy` object, which can be loaded from json via `taxo_utils.from_json`, for details see [File IO Format](#file-io-format) or an OWL ontology (`owlready2.Ontology` object)
             
