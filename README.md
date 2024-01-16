@@ -31,7 +31,7 @@ Current dependency conflicts suggest that ICON runs best with Python 3.8.
 
 ### Preliminaries
     
-The simplest usage of ICON is with Jupyter notebook. Before initialising an ICON object, make sure you have your data and three dependent sub-models.
+The simplest usage of ICON is with Jupyter notebook. An walkthrough tutorial is provided at [`demo.ipynb`](/demo.ipynb). Before initialising an ICON object, make sure you have your data and three dependent sub-models.
         
 - `data`: A taxonomy (`taxo_utils.Taxonomy` object, which can be loaded from json via `taxo_utils.from_json`, for details see [File IO Format](#file-io-format) or an OWL ontology (`owlready2.Ontology` object)
             
@@ -53,11 +53,13 @@ Next, download the pretrained language models from HuggingFace. Here we use [BER
 
 Finally, fine-tune each pretrained model using the corresponding notebook under `/model_training`. Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at `/demo.ipynb`.
 
-*Replace simcse* `tool.py`: If you wish to use the `RET_model` template from `/demo.ipynb`, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py`. The original SimCSE package displays some loggings and progress bars that are unnecessary for ICON's purposes, and the file replacement would suppress these outputs without affecting other functionalities.
-
 Please note that this is only a suggestion for the sub-models and deploying later models may be able to enhance ICON performances.
+
+### Replace simcse script
+
+If you wish to use the `RET_model` template from `/demo.ipynb`, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py`. The original SimCSE package displays some loggings and progress bars that are unnecessary for ICON's purposes, and the file replacement would suppress these outputs without affecting other functionalities.
     
-### Running ICON
+### Configurations
         
 Once you are ready, initialise an ICON object with your preferred configurations. If you just want to see ICON at work, use all the default configurations by e.g. `iconobj = ICON(data=your_data, ret_model=your_ret_model, gen_model=your_gen_model, sub_model=your_sub_model)` followed by `iconobj.run()` (this will trigger auto mode, see below). A complete list of configurations is provided as follows:
 
@@ -130,7 +132,9 @@ Once you are ready, initialise an ICON object with your preferred configurations
     - `eqv_score_func`: When ICON is updating taxonomies, it's sometimes necessary to estimate the likelihood of $a=b$ where $a$ and $b$ are two concepts, given the likelihoods of $a \sqsubseteq b$ (b subsumes a) and $b \sqsubseteq a$. This argument is therefore a function that crunches two probabilities together to estimate the intersection probability. It's usually fine to leave it as default, which is the multiplication operation.
     
     - `do_lexical_check`: Whether you would like to run a simple lexical screening for each new concept to see if it coincides with any existing concept. If set to `True`, ICON will have to pre-compute and cache the lexical features for each concept in the taxonomy when initialising.
-    
+
+### Running ICON
+
 Once you figure out your desired configurations and have initialised an ICON object, you can run ICON by simply calling `run()`. If you want to change configurations, simply do
 
 `iconobj.update_config(**your_new_config)`

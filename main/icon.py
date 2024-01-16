@@ -634,7 +634,7 @@ class ICON:
         # Demote the other equivalent classes to either superclasses or subclasses, whichever got the higher likelihood
         if len(eqv) > 1:
             ranked_eqvclasses = [k for k,_ in sorted(eqv.items(), key=lambda x: self.config.update_config.eqv_score_func(x[1]), reverse=True)]
-            do_nil_string = ' / lexical check' if resolution else ''
+            do_nil_string = ' or lexical check' if resolution else ''
             self.print_log(f'{Fore.RED}{Style.BRIGHT}Warning{Style.RESET_ALL}: Search{do_nil_string} suggests that {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL} is {Fore.MAGENTA}{Style.BRIGHT}equivalent{Style.RESET_ALL} to multiple known classes', 4, 'iter_details')
             for eqvclass in ranked_eqvclasses:
                 prob = self.config.update_config.eqv_score_func(eqv[eqvclass])
@@ -717,8 +717,8 @@ class ICON:
                     candidates = list(seedpool)
                     poolsize = len(candidates)
                     seed = candidates[np.random.choice(poolsize,1).item()]
-                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {Fore.BLACK}{Style.BRIGHT}{poolsize}{Style.RESET_ALL} possible candidates', 2, 'cycle')
                     self.status.outer_loop_count += 1
+                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {Fore.BLACK}{Style.BRIGHT}{poolsize}{Style.RESET_ALL} possible candidates', 2, 'cycle')
                     outer_loop_progress, processed = self.outer_loop(seed)
                     self.status.progress += outer_loop_progress
                     seedpool = seedpool.difference(processed)
@@ -740,8 +740,8 @@ class ICON:
         with self.status.pbar_outer:
             with self.status.pbar_inner:
                 for seed in self.config.semiauto_config.semiauto_seeds:
-                    self.print_log(f'Ouer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL})', 2, 'cycle')
                     self.status.outer_loop_count += 1
+                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self.status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self.status.working_taxo.get_label(seed)}{Style.RESET_ALL})', 2, 'cycle')
                     outer_loop_progress, _ = self.outer_loop(seed)
                     self.status.progress += outer_loop_progress
                     if self.status.pbar_outer:
@@ -821,7 +821,7 @@ class ICON:
             if self.models.sub_model is None:
                 raise ModuleNotFoundError(f'sub_model is required to run manual mode')
             elif self.config.manual_config.auto_bases and self.models.ret_model is None:
-                raise ModuleNotFoundError(f'ret_model is required to run manual mode with auto_bases')
+                raise ModuleNotFoundError(f'ret_model is required to run manual mode with auto_bases == True')
             self.manual()
         
         suffix = ' with transitive reduction' if self.config.transitive_reduction else ''
