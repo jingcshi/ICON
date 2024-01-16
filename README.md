@@ -55,7 +55,7 @@ Next, download the pretrained language models from HuggingFace. Here we use [BER
 
 Finally, fine-tune each pretrained model using the corresponding notebook under `/model_training`. Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at `/demo.ipynb`.
 
-*Replace simcse* `tool.py`: If you wish to use the `RET_model` template from `/demo.ipynb`, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py`. The original SimCSE package displays some loggings and progress bars that areå unnecessary for ICON's purposes, and the file replacement would suppress these outputs without affecting other functionalities.
+*Replace simcse* `tool.py`: If you wish to use the `RET_model` template from `/demo.ipynb`, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py`. The original SimCSE package displays some loggings and progress bars that are unnecessary for ICON's purposes, and the file replacement would suppress these outputs without affecting other functionalities.
 
 Please note that this is only a suggestion for the sub-models and deploying later models may be able to enhance ICON performances.
     

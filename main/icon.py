@@ -9,7 +9,7 @@ import numpy as np
 import owlready2 as o2
 import networkx as nx
 from tqdm.notebook import tqdm
-from main.log_style import Fore, Style
+from utils.log_style import Fore, Style
 from utils.taxo_utils import Taxonomy
 from utils.tokenset_utils import tokenset
 import main.config as _Config
