@@ -588,7 +588,7 @@ def from_ontology(onto: o2.Ontology) -> Taxonomy:
             visited[(newiri, superiri)] = True
             if newclass == o2.Thing:
                 node_id = 0
-                node_label = 'Root Node'
+                node_label = 'Root Concept'
             else:
                 node_id = int(re.findall(reIRI,newiri)[0])
                 node_label = newclass.label[0]
