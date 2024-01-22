@@ -6,6 +6,19 @@ ICON works by representing new concepts with combinations of existing concepts. 
 
 ![system-diagram](/assets/diagrams/system.png "Flowchart of ICON")
 
+## Table of Contents
+
+- [Dependencies](#dependencies)
+- [Usage](#usage)
+    - [Preliminaries](#preliminaries)
+        - [Replace simcse script](#replace-simcse-script)
+    - [Sub-models](#sub-models)
+        - [Data building settings](#data-building-settings)
+    - [Configurations](#configurations)
+    - [Running ICON](#running-icon)
+    - [Interpreting the outputs](#interpreting-the-outputs)
+- [File IO Format](#file-io-format)
+
 ## Dependencies
 
 ICON depends on the following packages:
@@ -42,22 +55,32 @@ The simplest usage of ICON is with Jupyter notebook. A walkthrough tutorial is p
 - `sub_model` (recommended signature: `sub_model(sub: Union[str, List[str]], sup: Union[str, List[str]], *args, **kwargs) -> numpy.ndarray)`: Predict whether each `sup` subsumes the corresponding `sub` given two lists of `sub` and `sup`
 
 The sub-models are essential plug-ins for ICON. Everything above (except `ret_model` or `gen_model` if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
+
+#### Replace simcse script
+
+If you wish to use the `RET_model` template from `/demo.ipynb`, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py`. The original SimCSE package displays some loggings and progress bars that are unnecessary for ICON's purposes, and the file replacement would suppress these outputs without affecting other functionalities.
         
 ### Sub-models
     
 We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and well-known pretrained language models to obtain the three required models.
 
-First, open each notebook under `/data_wrangling` and follow the instructions to build the training data for each sub-model using your taxonomy (or the Google PT taxonomy placed there by default). You should get two files under `/data/ret`, `/data/gen` and `/data/sub` each. One of them is for training and the other for evaluation.
+1. Use the scripts under `/data_wrangling` to build the training and evaluation data for each sub-model using your taxonomy (or the Google PT taxonomy placed there by default).
 
-Next, download the pretrained language models from HuggingFace. Here we use [BERT](https://huggingface.co/bert-base-cased) for both ret_model and sub_model, and [T5](https://huggingface.co/t5-base) for gen_model.
+    1. Open terminal and `cd` to `/data_wrangling`.
 
-Finally, fine-tune each pretrained model using the corresponding notebook under `/model_training`. Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at `/demo.ipynb`.
+    2. Adjust the data building settings by modifying `data_config.json`. Available settings will be listed [below](#data-building-settings).
+
+    3. Execute the scripts with `python ./FILENAME.py` where `FILENAME` is replaced by the name of the script you wish to run.
+
+2. Download the pretrained language models from HuggingFace. Here we use [BERT](https://huggingface.co/bert-base-cased) for both ret_model and sub_model, and [T5](https://huggingface.co/t5-base) for gen_model.
+
+3. Fine-tune the pretrained language models. A demonstration for fine-tuning each model can be found in the notebooks under `/model_training`. Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at `/demo.ipynb`.
 
 Please note that this is only a suggestion for the sub-models and deploying later models may be able to enhance ICON performances.
 
-### Replace simcse script
+#### Data building settings
 
-If you wish to use the `RET_model` template from `/demo.ipynb`, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py`. The original SimCSE package displays some loggings and progress bars that are unnecessary for ICON's purposes, and the file replacement would suppress these outputs without affecting other functionalities.
+Lorem Ipsum
     
 ### Configurations
         
