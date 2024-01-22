@@ -1,6 +1,6 @@
 # ICON 
 
-A self-supervised taxonomy enrichment system designed for implicit taxonomy completion.
+ICON (**I**mplicit **CON**cept Insertion) is a self-supervised taxonomy enrichment system designed for implicit taxonomy completion.
     
 ICON works by representing new concepts with combinations of existing concepts. It uses a seed to retrieve a cluster of closely related concepts, in order to zoom in on a small facet of the taxonomy. It then enumerates subsets of the cluster and uses a generative model to create a virtual concept for each subset that is expected to represent the subset's semantic union. The generated concept will go through a series of valiadations and its placement in the taxonomy will be decided by a search based on a sequence of subsumption tests. The outcome for each validated concept will be either a new concept inserted into the taxonomy, or a merger with existing concepts. The taxonomy is being updated dynamically each step.
 
@@ -13,7 +13,7 @@ ICON works by representing new concepts with combinations of existing concepts. 
     - [Preliminaries](#preliminaries)
         - [Replace simcse script](#replace-simcse-script)
     - [Sub-models](#sub-models)
-        - [Data building settings](#data-building-settings)
+        - [Fine-tuning data](#fine-tuning-data)
     - [Configurations](#configurations)
     - [Running ICON](#running-icon)
     - [Interpreting the outputs](#interpreting-the-outputs)
@@ -70,7 +70,7 @@ We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and
 
     1. Open terminal and `cd` to `/data_wrangling`.
 
-    2. Adjust the data building settings by modifying `data_config.json`. Available settings will be listed [below](#data-building-settings).
+    2. Adjust the data building settings by modifying `data_config.json`. A list of available settings and explanation on the data format is provided [below](#fine-tuning-data).
 
     3. Execute the scripts with `python ./FILENAME.py` where `FILENAME` is replaced by the name of the script you wish to run.
 
@@ -80,7 +80,7 @@ We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and
 
 Please note that this is only a suggestion for the sub-models and deploying later models may be able to enhance ICON performances.
 
-#### Data building settings
+#### Fine-tuning data
 
 Lorem Ipsum
     
