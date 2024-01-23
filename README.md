@@ -13,7 +13,7 @@ ICON works by representing new concepts with combinations of existing concepts. 
     - [Preliminaries](#preliminaries)
         - [Replace simcse script](#replace-simcse-script)
     - [Sub-models](#sub-models)
-        - [Fine-tuning data](#fine-tuning-data)
+        - [Fine-tuning data](#fine-tuning-data) (under construction)
     - [Configurations](#configurations)
     - [Running ICON](#running-icon)
     - [Interpreting the outputs](#interpreting-the-outputs)
@@ -24,21 +24,23 @@ ICON works by representing new concepts with combinations of existing concepts. 
 ICON depends on the following packages:
     
 - `numpy`
-- `torch`
 - `owlready2`
 - `networkx`
 - `tqdm`
 - `nltk`
-- `simcse`
         
 The pipeline for training sub-models that we provide in this README further depends on the following packages:
-    
+
+- `torch`
+- `pandas`    
 - `transformers`
 - `datasets`
 - `evaluate`
 - `info-nce-pytorch`
 
-Current dependency conflicts suggest that ICON runs best with Python 3.8.
+Furthermore, the package `simcse` is required if you wish to use the [official demonstration notebook](/demo.ipynb).
+
+Current dependency conflicts suggest that ICON runs best with **Python 3.8**.
 
 ## Usage
 
