@@ -13,7 +13,7 @@ ICON works by representing new concepts with combinations of existing concepts. 
     - [Preliminaries](#preliminaries)
         - [Replace simcse script](#replace-simcse-script)
     - [Sub-models](#sub-models)
-        - [Fine-tuning data](#fine-tuning-data) (under construction)
+        - [Fine-tuning data](#fine-tuning-data)
     - [Configurations](#configurations)
     - [Running ICON](#running-icon)
     - [Interpreting the outputs](#interpreting-the-outputs)
