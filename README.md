@@ -116,7 +116,7 @@ The `/data_wrangling/data_config.json` file contains the variable parameters for
 
     - `easy_negative_sample_rate`: The amount of easy negative rows relative to the number of positive rows. These negatives are obtained by replacing $\rm{sup}$ with a random concept.
 
-    - `negative_per_minibatch`: The amount of easy negative rows relative to the number of positive rows. These negatives are obtained by replacing $\rm{sup}$ with a concept reached via graph random walk from the original $\rm{sup}$.
+    - `hard_negative_sample_rate`: The amount of hard negative rows relative to the number of positive rows. These negatives are obtained by replacing $\rm{sup}$ with a concept reached via graph random walk from the original $\rm{sup}$.
     
 ### Configurations
         
