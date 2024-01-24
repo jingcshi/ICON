@@ -82,7 +82,39 @@ Please note that this is only a suggestion for the sub-models and deploying late
 
 #### Fine-tuning data
 
-Lorem Ipsum
+The `/data_wrangling/data_config.json` file contains the variable parameters for each of the dataset generation scripts that we provided:
+
+1. **Universal parameters:**
+
+    - `random_seed`: If set, this seed will be passed to the NumPy pseudorandom generator to ensure reproducibility.
+
+    - `data_path`: Location of your raw data.
+
+    - `eval_split_rate`: The ratio (acceptable range $[0,1)$) of evaluation set in the whole dataset.
+
+2. **RET model:** The data will follow the standard format for contrastive learning that is made of $(q,p,n_1,\ldots,n_k)$ tuples. Each tuple is called a *minibatch*. $q$ is the query concept; $p$ is the positive concept, a concept similar to the query (in our case a *sibling* of the query in the taxonomy); $n_1,\ldots ,n_k$ are the negative concepts which should be concepts that are dissimilar to the query. A sample data is provided [here](/data/ret/google-eval.csv).
+
+    - `concept_appearance_per_file`: How many times each concept in the taxonomy appears in the data.
+
+    - `negative_per_minibatch`: $k$ in the aforementioned minibatch format.
+    
+3. **GEN model:** The data will be lists of semicolon-delimited concept names accompanied by the concept name of the list's *LCA* (least common ancestor) as reference. Each row is a `([PREFIX][C1];...;[Cn], [LCA])` tuple. Usually the LCA is not trivial (i.e. not the root concept) but an option exists to intentionally *corrupt* some of the lists so that the LCA becomes trivial. A sample data is provided [here](/data/gen/google-eval.csv).
+
+    - `max_chunk_size`: Max length $(\geq 2)$ of the concept list in each row. The generated data will contain lists from length 1 to the specified number.
+
+    - `corrupt_ratio`: The ratio (acceptable range $[0,1]$) of corrupted data rows.
+
+    - `corrupt_patterns`: The specific ways data will be allowed to get corrupted. This parameter should be a list of distinct *pairs* of integers $(p_i,n_i)$ where $p$ is the number of uncorrupted concepts and $n$ is the number of randomly chosen concepts used for corruption. For each pair $p+n$ should be no greater than `max_chunk_size`, and $p$ should not equal 1 since that would be equivalent to $p=0$.
+
+    - `pattern_weight`: The relative frequency of each corrupt pattern. These weights do not need to add up to 1. This parameter should have the same list length as `corrupt_patterns`.
+
+    - `prompt_prefix`: The task prefix that will be prepended to all concept lists, used to facilitate the training of some language models. 
+
+3. **SUB model:** The data will be $(\rm{sub},\rm{sup},\rm{ref})$ tuples. $\rm{ref}$ is 1 when $\rm{sub}$ is a sub-concept of $\rm{sup}$, and 0 vice versa. Positive data will be all the child-parent and grandchild-grandparent pairs in the dataset. Negative data (rows where $\rm{ref}=0$) will be generated in two ways: *easy* and *hard*. A sample data is provided [here](/data/sub/google-eval.csv).
+
+    - `easy_negative_sample_rate`: The amount of easy negative rows relative to the number of positive rows. These negatives are obtained by replacing $\rm{sup}$ with a random concept.
+
+    - `negative_per_minibatch`: The amount of easy negative rows relative to the number of positive rows. These negatives are obtained by replacing $\rm{sup}$ with a concept reached via graph random walk from the original $\rm{sup}$.
     
 ### Configurations
         
