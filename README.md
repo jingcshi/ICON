@@ -66,9 +66,9 @@ If you wish to use the `RET_model` template from `/demo.ipynb`, please temporari
     
 We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and well-known pretrained language models to obtain the three required models.
 
-1. Use the scripts under `/data_wrangling` to build the training and evaluation data for each sub-model using your taxonomy (or the Google PT taxonomy placed there by default).
+1. Use the scripts under `/experiments/data_wrangling` to build the training and evaluation data for each sub-model using your taxonomy (or the Google PT taxonomy placed there by default).
 
-    1. Open terminal and `cd` to `/data_wrangling`.
+    1. Open terminal and `cd` to `/experiments/data_wrangling`.
 
     2. Adjust the data building settings by modifying `data_config.json`. A list of available settings and explanation on the data format is provided [below](#fine-tuning-data).
 
@@ -76,13 +76,13 @@ We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and
 
 2. Download the pretrained language models from HuggingFace. Here we use [BERT](https://huggingface.co/bert-base-cased) for both ret_model and sub_model, and [T5](https://huggingface.co/t5-base) for gen_model.
 
-3. Fine-tune the pretrained language models. A demonstration for fine-tuning each model can be found in the notebooks under `/model_training`. Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at `/demo.ipynb`.
+3. Fine-tune the pretrained language models. A demonstration for fine-tuning each model can be found in the notebooks under `/experiments/model_training`. Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at `/demo.ipynb`.
 
 Please note that this is only a suggestion for the sub-models and deploying later models may be able to enhance ICON performances.
 
 #### Fine-tuning data
 
-The `/data_wrangling/data_config.json` file contains the variable parameters for each of the dataset generation scripts that we provided:
+The `/experiments/data_wrangling/data_config.json` file contains the variable parameters for each of the dataset generation scripts that we provided:
 
 1. **Universal parameters:**
 
