@@ -1,13 +1,13 @@
 {
     "random_seed": null,
     "ret": {
-        "data_path": "./../data/raw/google.json",
+        "data_path": "./../../data/raw/google.json",
         "eval_split_rate": 0.1,
         "concept_appearance_per_file": 2,
         "negative_per_minibatch": 9
     },
     "gen": {
-        "data_path": "./../data/raw/google.json",
+        "data_path": "./../../data/raw/google.json",
         "eval_split_rate": 0.1,
         "max_chunk_size": 3,
         "corrupt_ratio": 0.3,
@@ -33,7 +33,7 @@
         "prompt_prefix": "summarize: "
     },
     "sub": {
-        "data_path": "./../data/raw/google.json",
+        "data_path": "./../../data/raw/google.json",
         "eval_split_rate": 0.1,
         "easy_negative_sample_rate": 1,
         "hard_negative_sample_rate": 1

@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append(os.getcwd() + '/..')
+sys.path.append(os.getcwd() + '/../..')
 import re
 import json
 import pandas as pd
@@ -144,8 +144,8 @@ if __name__ == '__main__':
     
     now = datetime.now()
     timestr = now.strftime('%Y%m%d-%H%M')
-    train_data.to_csv(f'./../data/gen/{dataset_name}-{timestr}-train.csv',index=False)
+    train_data.to_csv(f'./../../data/gen/{dataset_name}-{timestr}-train.csv',index=False)
     print(f'Training data generated and saved at /data/gen/{dataset_name}-{timestr}-train.csv')
     if eval_data is not None:
-        eval_data.to_csv(f'./../data/gen/{dataset_name}-{timestr}-eval.csv',index=False)
+        eval_data.to_csv(f'./../../data/gen/{dataset_name}-{timestr}-eval.csv',index=False)
         print(f'Evaluation data generated and saved at /data/gen/{dataset_name}-{timestr}-eval.csv')
