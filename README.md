@@ -38,7 +38,7 @@ The pipeline for training sub-models that we provide in this README further depe
 - `evaluate`
 - `info-nce-pytorch`
 
-Furthermore, the package `simcse` is required if you wish to use the [official demonstration notebook](/demo.ipynb).
+Furthermore, the package `simcse` is required if you wish to use the [official demonstration notebook](./demo.ipynb).
 
 Current dependency conflicts suggest that ICON runs best with **Python 3.8**.
 
@@ -46,7 +46,7 @@ Current dependency conflicts suggest that ICON runs best with **Python 3.8**.
 
 ### Preliminaries
     
-The simplest usage of ICON is with Jupyter notebook. A walkthrough tutorial is provided at [`demo.ipynb`](/demo.ipynb). Before initialising an ICON object, make sure you have your data and three dependent sub-models.
+The simplest usage of ICON is with Jupyter notebook. A walkthrough tutorial is provided at [`demo.ipynb`](./demo.ipynb). Before initialising an ICON object, make sure you have your data and three dependent sub-models.
         
 - `data`: A taxonomy (`taxo_utils.Taxonomy` object, which can be loaded from json via `taxo_utils.from_json`, for details see [File IO Format](#file-io-format) or an OWL ontology (`owlready2.Ontology` object)
             
@@ -94,13 +94,13 @@ The `/data_wrangling/data_config.json` file contains the variable parameters for
 
     - `eval_split_rate`: The ratio (acceptable range $[0,1)$) of evaluation set in the whole dataset.
 
-2. **RET model:** The data will follow the standard format for contrastive learning that is made of $(q,p,n_1,\ldots,n_k)$ tuples. Each tuple is called a *minibatch*. $q$ is the query concept; $p$ is the positive concept, a concept similar to the query (in our case a *sibling* of the query in the taxonomy); $n_1,\ldots ,n_k$ are the negative concepts which should be concepts that are dissimilar to the query. A sample data is provided [here](/data/ret/google-eval.csv).
+2. **RET model:** The data will follow the standard format for contrastive learning that is made of $(q,p,n_1,\ldots,n_k)$ tuples. Each tuple is called a *minibatch*. $q$ is the query concept; $p$ is the positive concept, a concept similar to the query (in our case a *sibling* of the query in the taxonomy); $n_1,\ldots ,n_k$ are the negative concepts which should be concepts that are dissimilar to the query. A sample data is provided [here](./data/ret/google-eval.csv).
 
     - `concept_appearance_per_file`: How many times each concept in the taxonomy appears in the data.
 
     - `negative_per_minibatch`: $k$ in the aforementioned minibatch format.
     
-3. **GEN model:** The data will be lists of semicolon-delimited concept names accompanied by the concept name of the list's *LCA* (least common ancestor) as reference. Each row is a `([PREFIX][C1];...;[Cn], [LCA])` tuple. Usually the LCA is not trivial (i.e. not the root concept) but an option exists to intentionally *corrupt* some of the lists so that the LCA becomes trivial. A sample data is provided [here](/data/gen/google-eval.csv).
+3. **GEN model:** The data will be lists of semicolon-delimited concept names accompanied by the concept name of the list's *LCA* (least common ancestor) as reference. Each row is a `([PREFIX][C1];...;[Cn], [LCA])` tuple. Usually the LCA is not trivial (i.e. not the root concept) but an option exists to intentionally *corrupt* some of the lists so that the LCA becomes trivial. A sample data is provided [here](./data/gen/google-eval.csv).
 
     - `max_chunk_size`: Max length $(\geq 2)$ of the concept list in each row. The generated data will contain lists from length 1 to the specified number.
 
@@ -112,7 +112,7 @@ The `/data_wrangling/data_config.json` file contains the variable parameters for
 
     - `prompt_prefix`: The task prefix that will be prepended to all concept lists, used to facilitate the training of some language models. 
 
-3. **SUB model:** The data will be $(\rm{sub},\rm{sup},\rm{ref})$ tuples. $\rm{ref}$ is 1 when $\rm{sub}$ is a sub-concept of $\rm{sup}$, and 0 vice versa. Positive data will be all the child-parent and grandchild-grandparent pairs in the dataset. Negative data (rows where $\rm{ref}=0$) will be generated in two ways: *easy* and *hard*. A sample data is provided [here](/data/sub/google-eval.csv).
+3. **SUB model:** The data will be $(\rm{sub},\rm{sup},\rm{ref})$ tuples. $\rm{ref}$ is 1 when $\rm{sub}$ is a sub-concept of $\rm{sup}$, and 0 vice versa. Positive data will be all the child-parent and grandchild-grandparent pairs in the dataset. Negative data (rows where $\rm{ref}=0$) will be generated in two ways: *easy* and *hard*. A sample data is provided [here](./data/sub/google-eval.csv).
 
     - `easy_negative_sample_rate`: The amount of easy negative rows relative to the number of positive rows. These negatives are obtained by replacing $\rm{sup}$ with a random concept.
 
