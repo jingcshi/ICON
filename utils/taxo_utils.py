@@ -3,6 +3,7 @@ import re
 import os
 from typing import List, Set, Union, Literal, Type, Iterable, Hashable, Optional
 from collections import deque
+from copy import deepcopy
 import owlready2 as o2
 import networkx as nx
 import json
@@ -414,7 +415,7 @@ class Taxonomy(nx.DiGraph):
         If strict = True, the subgraph will exclude any class that do not subsume at least one base class.
         '''    
         if not base:
-            return self.copy()
+            return deepcopy(self)
         subgraph = Taxonomy()
         base = self.reduce_subset(base,return_type=set)
         
@@ -512,7 +513,8 @@ class Taxonomy(nx.DiGraph):
                     return obj.tolist()
                 return super(NpEncoder, self).default(obj)
             
-        towrite = self.copy().remove_node(0)
+        towrite = deepcopy(self)
+        towrite.remove_node(0)
         obj = {'nodes': [{'id':n, **towrite.nodes[n]} for n in towrite.nodes()], 'edges': [{'src':e[0], 'tgt':e[1], **towrite.edges[e]} for e in towrite.edges()]}
         with open(file_path, 'w') as outf:
             outf.write(json.dumps(obj, cls=NpEncoder, **kwargs))
