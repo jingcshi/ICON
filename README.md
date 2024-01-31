@@ -192,7 +192,7 @@ Once you are ready, initialise an ICON object with your preferred configurations
 
 ### Running ICON
 
-Once you figure out your desired configurations and have initialised an ICON object, you can run ICON by simply calling `run()`. If you want to change configurations, simply do
+After completing configuration and having an ICON object initialised, you can run ICON by simply calling `run()`. If you want to change configurations, use the method
 
 `iconobj.update_config(**your_new_config)`
     
