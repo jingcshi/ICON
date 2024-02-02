@@ -380,7 +380,7 @@ class ICON:
             self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Rejected{Style.RESET_ALL} by label generator', 3, 'iter')
             return None
 
-        self.print_log(f'Generated common parent label: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 3, 'iter')
+        self.print_log(f'Generated semantic union label: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 3, 'iter')
         return newlabel
     
     def enhanced_traversal(self, taxo: Taxonomy, newlabel: str, base: Iterable[Hashable]) -> Tuple[dict, dict, dict]:
@@ -724,7 +724,7 @@ class ICON:
                     poolsize = len(candidates)
                     seed = candidates[np.random.choice(poolsize,1).item()]
                     self._status.outer_loop_count += 1
-                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self._status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {Fore.BLACK}{Style.BRIGHT}{poolsize}{Style.RESET_ALL} possible candidates', 2, 'cycle')
+                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self._status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {poolsize} possible candidates', 2, 'cycle')
                     outer_loop_progress, processed = self.outer_loop(seed)
                     self._status.progress += outer_loop_progress
                     seedpool = seedpool.difference(processed)
