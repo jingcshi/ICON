@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/731812141.svg)](https://zenodo.org/doi/10.5281/zenodo.10685462)
+
 # ICON 
 
 ICON (**I**mplicit **CON**cept Insertion) is a self-supervised taxonomy enrichment system designed for implicit taxonomy completion.
