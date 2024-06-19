@@ -13,7 +13,8 @@ from tqdm.notebook import tqdm
 from utils.log_style import Fore, Style
 from utils.taxo_utils import Taxonomy
 from utils.tokenset_utils import tokenset
-import main.config as _Config
+import utils.concept_repr as _repr
+import main.config as _config
 
 class NullContext:
     '''
@@ -289,20 +290,20 @@ class ICON:
         if isinstance(data,o2.Ontology):
             data = Taxonomy.from_ontology(data)
         self.data = data
-        self.models = _Config.icon_models(ret_model,gen_model,sub_model)
-        self._caches = _Config.icon_caches()
-        self._status = _Config.icon_status()
-        self.config = _Config.icon_config(mode,
+        self.models = _config.icon_models(ret_model,gen_model,sub_model)
+        self._caches = _config.icon_caches()
+        self._status = _config.icon_status()
+        self.config = _config.icon_config(mode,
                                 rand_seed,
-                                _Config.icon_auto_config(max_outer_loop),
-                                _Config.icon_semiauto_config(semiauto_seeds),
-                                _Config.icon_manual_config(input_concepts,manual_concept_bases,auto_bases),
-                                _Config.icon_ret_config(retrieve_size,restrict_combinations),
-                                _Config.icon_gen_config(ignore_label,filter_subset),
-                                _Config.icon_sub_config(
-                                    _Config.icon_subgraph_config(subgraph_crop,subgraph_force,subgraph_strict),
-                                    _Config.icon_search_config(threshold,tolerance,force_base_subsumptions,force_prune)),
-                                _Config.icon_update_config(do_update,eqv_score_func,do_lexical_check),
+                                _config.icon_auto_config(max_outer_loop),
+                                _config.icon_semiauto_config(semiauto_seeds),
+                                _config.icon_manual_config(input_concepts,manual_concept_bases,auto_bases),
+                                _config.icon_ret_config(retrieve_size,restrict_combinations),
+                                _config.icon_gen_config(ignore_label,filter_subset),
+                                _config.icon_sub_config(
+                                    _config.icon_subgraph_config(subgraph_crop,subgraph_force,subgraph_strict),
+                                    _config.icon_search_config(threshold,tolerance,force_base_subsumptions,force_prune)),
+                                _config.icon_update_config(do_update,eqv_score_func,do_lexical_check),
                                 transitive_reduction,
                                 logging)
         
@@ -362,14 +363,14 @@ class ICON:
     def update_config(self, **kwargs) -> None:
         
         for arg, value in kwargs.items():
-            self.config = _Config.Update_config(self.config, arg, value)
+            self.config = _config.Update_config(self.config, arg, value)
     
     def generate(self, base: Iterable[Hashable]) -> Optional[str]:
         
         if self.config.gen_config.filter_subset:
         # Skip if the LCA is already in base
             if self._status.working_taxo.get_LCA(base,return_type=set).issubset(set(base)):
-                self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Skipped{Style.RESET_ALL} because a trivial LCA exists', 3, 'iter')
+                self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Skipped{Style.RESET_ALL} because a trivial LCA exists', 3, 'inner_loop')
                 return None
 
         # Generate new CP label
@@ -377,10 +378,10 @@ class ICON:
 
         # Reject if the generated label is considered root
         if newlabel in self.config.gen_config.ignore_label:
-            self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Rejected{Style.RESET_ALL} by label generator', 3, 'iter')
+            self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Rejected{Style.RESET_ALL} by label generator', 3, 'inner_loop')
             return None
 
-        self.print_log(f'Generated semantic union label: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 3, 'iter')
+        self.print_log(f'Generated semantic union label: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 3, 'inner_loop')
         return newlabel
     
     def enhanced_traversal(self, taxo: Taxonomy, newlabel: str, base: Iterable[Hashable]) -> Tuple[dict, dict, dict]:
@@ -442,14 +443,14 @@ class ICON:
                             visited[desc] = True
                     continue
                 # Recursively track down the domain to keep searching
-                for child in taxo.get_subclasses(node):
+                for child in taxo.get_children(node):
                     if child not in visited:
                         queue.append((child,0))
                         to_cache.append(taxo.get_label(child))
                 if to_cache:
                     self.update_sub_score_cache([newlabel]*len(to_cache), to_cache)
             elif fails < self.config.sub_config.search.tolerance:
-                for child in taxo.get_subclasses(node):
+                for child in taxo.get_children(node):
                     if child not in visited:
                         # Keep searching down until success or failures accumulate to tolerance. Used to alleviate misjudgments of the model
                         queue.append((child,fails+1))
@@ -503,7 +504,7 @@ class ICON:
                 else:
                     sub[node] = p
                 # Recursively track up the domain to keep searching
-                for parent in taxo.get_superclasses(node):
+                for parent in taxo.get_parents(node):
                     if parent not in visited:
                         queue.append((parent,0))
                         to_cache.append(taxo.get_label(parent))
@@ -511,7 +512,7 @@ class ICON:
                     self.update_sub_score_cache(to_cache, [newlabel]*len(to_cache))
             elif fails < self.config.sub_config.search.tolerance:
                 # Keep searching up until success or failures accumulate to tolerance
-                for parent in taxo.get_superclasses(node):
+                for parent in taxo.get_parents(node):
                     if parent not in visited:
                         queue.append((parent,fails+1))
                         to_cache.append(taxo.get_label(parent))
@@ -527,7 +528,7 @@ class ICON:
         
         return sup, sub, eqv
     
-    def update_taxonomy(self, taxo:Taxonomy, new:str, eqv: Optional[Hashable], sup: Optional[list], sub: Optional[list]) -> np.ndarray:
+    def insert(self, taxo:Taxonomy, new:str, eqv: Optional[Hashable], sup: Optional[list], sub: Optional[list]) -> np.ndarray:
         '''
         Insert or merge a *new* concept (represented by its label) into taxonomies, and add corresponding subsumptions. Newly inserted edges will be labelled 'added' in the companion taxonomies
         All input classes should be represented by their keys
@@ -553,7 +554,7 @@ class ICON:
         # Case 1: Merge with a known equivalent class    
         if eqv:
             if eqv in taxo.nodes:
-                self.print_log(f'Declared {Fore.MAGENTA}{Style.BRIGHT}equivalence{Style.RESET_ALL} between {Fore.YELLOW}{Style.BRIGHT}{taxo.get_label(eqv)}{Style.RESET_ALL} ({eqv}) and {Fore.CYAN}{Style.BRIGHT}{new}{Style.RESET_ALL}', 4, 'iter_details')
+                self.print_log(f'Declared {Fore.MAGENTA}{Style.BRIGHT}equivalence{Style.RESET_ALL} between {Fore.YELLOW}{Style.BRIGHT}{taxo.get_label(eqv)}{Style.RESET_ALL} ({eqv}) and {Fore.CYAN}{Style.BRIGHT}{new}{Style.RESET_ALL}', 4, 'inner_loop_details')
                 selfclass = eqv
                 self_color = Fore.YELLOW
                 self_label = taxo.get_label(eqv)
@@ -563,7 +564,7 @@ class ICON:
         # Case 2: Add a new class
         else:
             if taxo.add_node(self._status.nextkey,label=new) == 0:
-                self.print_log(f'{Fore.GREEN}{Style.BRIGHT}Created{Style.RESET_ALL} new class {Fore.CYAN}{Style.BRIGHT}{new}{Style.RESET_ALL} with key {Fore.BLACK}{Style.BRIGHT}{self._status.nextkey}{Style.RESET_ALL}', 4, 'iter_details')
+                self.print_log(f'{Fore.GREEN}{Style.BRIGHT}Created{Style.RESET_ALL} new class {Fore.CYAN}{Style.BRIGHT}{new}{Style.RESET_ALL} with key {Fore.BLACK}{Style.BRIGHT}{self._status.nextkey}{Style.RESET_ALL}', 4, 'inner_loop_details')
                 self.update_lexical_cache(self._status.working_taxo, self._status.nextkey, new)
                 selfclass = self._status.nextkey
                 self_color = Fore.CYAN
@@ -578,13 +579,13 @@ class ICON:
             try:
                 if taxo.add_edge(selfclass,superclass,label='new') == 0:
                     sup_set.add(superclass)
-            except TypeError:
+            except nx.NetworkXError:
                 superr_set.add(superclass)
         for subclass in sub:
             try:
                 if taxo.add_edge(subclass,selfclass,label='new') == 0:
                     sub_set.add(subclass)
-            except TypeError:
+            except nx.NetworkXError:
                 suberr_set.add(subclass)
         additions[1] = len(sup_set) + len(sub_set)
         
@@ -592,34 +593,34 @@ class ICON:
         if sup_set:
             verb = 'are' if len(sup_set) > 1 else 'is'
             suffix = 'es' if len(sup_set) > 1 else ''
-            self.print_log(f'The following class{suffix} {verb} declared as {Fore.MAGENTA}{Style.BRIGHT}superclass{suffix}{Style.RESET_ALL} of {self_color}{Style.BRIGHT}{self_label}{Style.RESET_ALL}:', 5, 'iter_classlist')
+            self.print_log(f'The following class{suffix} {verb} declared as {Fore.MAGENTA}{Style.BRIGHT}superclass{suffix}{Style.RESET_ALL} of {self_color}{Style.BRIGHT}{self_label}{Style.RESET_ALL}:', 5, 'inner_loop_concept_list')
             for supc in sup_set:
-                self.print_log(f'\t{Fore.BLUE}{Style.BRIGHT}{taxo.get_label(supc)} {Style.RESET_ALL}({supc})', 5, 'iter_classlist')
+                self.print_log(f'\t{Fore.BLUE}{Style.BRIGHT}{taxo.get_label(supc)} {Style.RESET_ALL}({supc})', 5, 'inner_loop_concept_list')
         if sub_set:
             verb = 'are' if len(sub_set) > 1 else 'is'
             suffix = 'es' if len(sub_set) > 1 else ''
-            self.print_log(f'The following class{suffix} {verb} declared as {Fore.MAGENTA}{Style.BRIGHT}subclass{suffix}{Style.RESET_ALL} of {self_color}{Style.BRIGHT}{self_label}{Style.RESET_ALL}:', 5, 'iter_classlist')
+            self.print_log(f'The following class{suffix} {verb} declared as {Fore.MAGENTA}{Style.BRIGHT}subclass{suffix}{Style.RESET_ALL} of {self_color}{Style.BRIGHT}{self_label}{Style.RESET_ALL}:', 5, 'inner_loop_concept_list')
             for subc in sub_set:
-                self.print_log(f'\t{Fore.BLUE}{Style.BRIGHT}{taxo.get_label(subc)} {Style.RESET_ALL}({subc})', 5, 'iter_classlist')
+                self.print_log(f'\t{Fore.BLUE}{Style.BRIGHT}{taxo.get_label(subc)} {Style.RESET_ALL}({subc})', 5, 'inner_loop_concept_list')
 
         err_set = superr_set.union(suberr_set)
         if err_set:
             verb = 'are' if len(err_set) > 1 else 'is'
             suffix = 's' if len(err_set) > 1 else ''
-            self.print_log(f'{Fore.RED}{Style.BRIGHT}Warning{Style.RESET_ALL}: The following subClassOf relation{suffix} {verb} {Fore.BLACK}{Style.BRIGHT}discarded{Style.RESET_ALL} because of cyclic inheritance:', 5, 'iter_classlist')
+            self.print_log(f'{Fore.RED}{Style.BRIGHT}Warning{Style.RESET_ALL}: The following subClassOf relation{suffix} {verb} {Fore.BLACK}{Style.BRIGHT}discarded{Style.RESET_ALL} because of cyclic inheritance:', 5, 'inner_loop_concept_list')
             for supc in superr_set:
-                self.print_log(f'\t{self_color}{Style.BRIGHT}{self_label} {Fore.BLACK}--> {Fore.BLUE}{taxo.get_label(supc)} {Style.RESET_ALL}({supc})', 5, 'iter_classlist')
+                self.print_log(f'\t{self_color}{Style.BRIGHT}{self_label} {Fore.BLACK}--> {Fore.BLUE}{taxo.get_label(supc)} {Style.RESET_ALL}({supc})', 5, 'inner_loop_concept_list')
             for subc in suberr_set:
-                    self.print_log(f'\t{Fore.BLUE}{Style.BRIGHT}{taxo.get_label(subc)} {Style.RESET_ALL}({subc}) {Fore.BLACK}{Style.BRIGHT}--> {self_color}{self_label}{Style.RESET_ALL}', 5, 'iter_classlist')
+                    self.print_log(f'\t{Fore.BLUE}{Style.BRIGHT}{taxo.get_label(subc)} {Style.RESET_ALL}({subc}) {Fore.BLACK}{Style.BRIGHT}--> {self_color}{self_label}{Style.RESET_ALL}', 5, 'inner_loop_concept_list')
         
         return additions
     
     def inner_loop(self, newlabel: str, base: Iterable[Hashable]) -> np.ndarray:
     
         # Create search domain.
-        subtaxo = self._status.working_taxo.create_subgraph(base, crop_top=self.config.sub_config.subgraph.subgraph_crop, force_labels=self.config.sub_config.subgraph.subgraph_force, strict=self.config.sub_config.subgraph.subgraph_strict)
+        subtaxo = self._status.working_taxo.create_insertion_search_space(base, crop_top=self.config.sub_config.subgraph.subgraph_crop, force_labels=self.config.sub_config.subgraph.subgraph_force, strict=self.config.sub_config.subgraph.subgraph_strict)
         subgraph_size = len(subtaxo.nodes)
-        self.print_log(f'Searching on a domain of {subgraph_size} classes', 4, 'iter_details')
+        self.print_log(f'Searching on a domain of {subgraph_size} classes', 4, 'inner_loop_details')
 
         # Search for optimal placement using the SUB model to predict subsumption.
         sup, sub, eqv = self.enhanced_traversal(subtaxo,newlabel,base)
@@ -628,29 +629,29 @@ class ICON:
         if resolution:
             # We give 100% confidence to the linkage of NIL model, thus making it supercede any other possible equivalences provided by search
             eqv[resolution] = (1.0,1.0)
-            self.print_log(f'\tSearch complete. {Fore.YELLOW}{Style.BRIGHT}Mapped{Style.RESET_ALL} to a known class by lexical check', 3, 'iter')
+            self.print_log(f'\tSearch complete. {Fore.YELLOW}{Style.BRIGHT}Mapped{Style.RESET_ALL} to a known class by lexical check', 3, 'inner_loop')
         else:
-            self.print_log(f'\tSearch complete. {Fore.GREEN}{Style.BRIGHT}Validated{Style.RESET_ALL} by lexical check', 3, 'iter')
+            self.print_log(f'\tSearch complete. {Fore.GREEN}{Style.BRIGHT}Validated{Style.RESET_ALL} by lexical check', 3, 'inner_loop')
 
         # Reject the new class because there is no good placement
         if not sup and not eqv:
-            self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Rejected{Style.RESET_ALL} by search because no good placement can be found', 3, 'iter')
+            self.print_log(f'\t{Fore.BLACK}{Style.BRIGHT}Rejected{Style.RESET_ALL} by search because no good placement can be found', 3, 'inner_loop')
             return np.array([0,0], dtype=int)
         # When there are more than one equivalent classes, keep only the most confident equivalent class
         # Demote the other equivalent classes to either superclasses or subclasses, whichever got the higher likelihood
         if len(eqv) > 1:
             ranked_eqvclasses = [k for k,_ in sorted(eqv.items(), key=lambda x: self.config.update_config.eqv_score_func(x[1]), reverse=True)]
             do_nil_string = ' or lexical check' if resolution else ''
-            self.print_log(f'{Fore.RED}{Style.BRIGHT}Warning{Style.RESET_ALL}: Search{do_nil_string} suggests that {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL} is {Fore.MAGENTA}{Style.BRIGHT}equivalent{Style.RESET_ALL} to multiple known classes', 4, 'iter_details')
+            self.print_log(f'{Fore.RED}{Style.BRIGHT}Warning{Style.RESET_ALL}: Search{do_nil_string} suggests that {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL} is {Fore.MAGENTA}{Style.BRIGHT}equivalent{Style.RESET_ALL} to multiple known classes', 4, 'inner_loop_details')
             for eqvclass in ranked_eqvclasses:
                 prob = self.config.update_config.eqv_score_func(eqv[eqvclass])
-                self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(eqvclass)}{Style.RESET_ALL} with score {prob:.4f}', 5, 'iter_classlist')
+                self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(eqvclass)}{Style.RESET_ALL} with score {prob:.4f}', 5, 'inner_loop_concept_list')
             for eqvclass in ranked_eqvclasses[1:]:
                 if eqv[eqvclass][0] >= eqv[eqvclass][1]:
                     sup[eqvclass] = eqv.pop(eqvclass)[0]
                 else:
                     sub[eqvclass] = eqv.pop(eqvclass)[1]
-            self.print_log(f'For safety, only the highest ranked equivalence is preserved', 4, 'iter_details')
+            self.print_log(f'For safety, only the highest ranked equivalence is preserved', 4, 'inner_loop_details')
 
         if eqv:
             eqvc = list(eqv)[0]
@@ -658,24 +659,33 @@ class ICON:
             sup.pop(eqvc, None)
             sub.pop(eqvc, None)
             if not resolution:
-                self.print_log(f'\t{Fore.YELLOW}{Style.BRIGHT}Mapped{Style.RESET_ALL} to a known class by search', 3, 'iter')
+                self.print_log(f'\t{Fore.YELLOW}{Style.BRIGHT}Mapped{Style.RESET_ALL} to a known class by search', 3, 'inner_loop')
         else:
             eqvc = None
-            self.print_log(f'\t{Fore.GREEN}{Style.BRIGHT}Accepted{Style.RESET_ALL} as a new class by search', 3, 'iter')
+            self.print_log(f'\t{Fore.GREEN}{Style.BRIGHT}Accepted{Style.RESET_ALL} as a new class by search', 3, 'inner_loop')
         
         self._status.logs[newlabel] = {'equivalent': eqv, 'superclass': sup, 'subclass': sub}
-        return self.update_taxonomy(self._status.working_taxo,newlabel,eqv=eqvc,sup=list(sup),sub=list(sub)) if self.config.update_config.do_update else np.array([0,0], dtype=int)    
+        return self.insert(self._status.working_taxo,newlabel,eqv=eqvc,sup=list(sup),sub=list(sub)) if self.config.update_config.do_update else np.array([0,0], dtype=int)    
     
     def outer_loop(self, seed: Hashable) -> Tuple[np.ndarray, Set[Hashable]]:
         
         outer_loop_progress = np.array([0,0],dtype=int)
     
-        # Retrieve a set of relevant classes from the KNN model, henceforce referred to as base_classes
-        base_classes = self.models.ret_model(self._status.working_taxo, self._status.working_taxo.get_label(seed), k=self.config.ret_config.retrieve_size)
-        self.print_log(f'Retrieved {Fore.BLACK}{Style.BRIGHT}{len(base_classes)}{Style.RESET_ALL} classes', 3, 'cycle_details')
+        # Retrieve a set of relevant classes from the KNN model, henceforth referred to as base_classes
+        base_classes = self.models.ret_model(self._status.working_taxo.get_label(list(self._status.working_taxo.nodes)), self._status.working_taxo.get_label(seed), k=self.config.ret_config.retrieve_size)
+        # base_classes = self.models.ret_model(self._status.working_taxo, self._status.working_taxo.get_label(seed), k=1+self.config.ret_config.retrieve_size)
+        # if seed in base_classes:
+        #     base_classes.remove(seed)
+        #     base_classes = base_classes[:-1]
+        #     base_classes = [seed] + base_classes
+        # else:
+        #     base_classes = [seed] + base_classes[:-2]
+        self.print_log(f'Retrieved {Fore.BLACK}{Style.BRIGHT}{len(base_classes)}{Style.RESET_ALL} classes', 3, 'outer_loop_details')
         for c in base_classes:
-            self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(c)}{Style.RESET_ALL}', 4, 'cycle_classlist')
+            self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(c)}{Style.RESET_ALL}', 4, 'outer_loop_concept_list')
         
+
+
         # Use base class pairs as prompt for the GEN model to generate new class names
         if self.config.ret_config.restrict_combinations:
             non_seed = base_classes.copy()
@@ -684,14 +694,14 @@ class ICON:
         else:
             intermediate_concepts = list(combinations(base_classes, 2))
         
-        if self._status.pbar_inner:
+        if self._status.pbar_inner and intermediate_concepts:
             self._status.pbar_inner.reset(total = len(intermediate_concepts))
             self._status.pbar_inner.set_description(f'Outer loop {self._status.outer_loop_count}')
         for i,subset in enumerate(intermediate_concepts):
             msg = f'Inner loop {Fore.BLACK}{Style.BRIGHT}{self._status.outer_loop_count}.{i+1}{Style.RESET_ALL}: Combination ('
             for b in subset:
                 msg += f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(b)}{Style.RESET_ALL}, '
-            self.print_log(msg[:-2] + ')', 3, 'iter')
+            self.print_log(msg[:-2] + ')', 3, 'inner_loop')
             
             newlabel = self.generate(subset)
             if newlabel:
@@ -699,9 +709,9 @@ class ICON:
                 outer_loop_progress += inner_loop_progress
             if self._status.pbar_inner:
                 self._status.pbar_inner.update()
-        
-        progress_str = f' Added {Fore.BLACK}{Style.BRIGHT}{outer_loop_progress[0]}{Style.RESET_ALL} new classes and {Fore.BLACK}{Style.BRIGHT}{outer_loop_progress[1]}{Style.RESET_ALL} new direct subsumptions.' if self.config.update_config.do_update else ''
-        self.print_log(f'Outer loop complete.{progress_str}', 2, 'cycle')
+
+        if self.config.update_config.do_update:
+            self.print_log(f'Outer loop complete. Added {Fore.BLACK}{Style.BRIGHT}{outer_loop_progress[0]}{Style.RESET_ALL} new classes and {Fore.BLACK}{Style.BRIGHT}{outer_loop_progress[1]}{Style.RESET_ALL} new direct subsumptions.', 2, 'outer_loop')
         return outer_loop_progress, set(base_classes)
     
     def auto(self, **kwargs) -> None:
@@ -724,7 +734,8 @@ class ICON:
                     poolsize = len(candidates)
                     seed = candidates[np.random.choice(poolsize,1).item()]
                     self._status.outer_loop_count += 1
-                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self._status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {poolsize} possible candidates', 2, 'cycle')
+                    plural_str = 's' if poolsize > 1 else ''
+                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self._status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(seed)}{Style.RESET_ALL}) selected from {poolsize} possible candidate{plural_str}', 2, 'outer_loop')
                     outer_loop_progress, processed = self.outer_loop(seed)
                     self._status.progress += outer_loop_progress
                     seedpool = seedpool.difference(processed)
@@ -747,7 +758,7 @@ class ICON:
             with self._status.pbar_inner:
                 for seed in self.config.semiauto_config.semiauto_seeds:
                     self._status.outer_loop_count += 1
-                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self._status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(seed)}{Style.RESET_ALL})', 2, 'cycle')
+                    self.print_log(f'Outer loop {Fore.BLACK}{Style.BRIGHT}{self._status.outer_loop_count}{Style.RESET_ALL}: Seed {seed} ({Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(seed)}{Style.RESET_ALL})', 2, 'outer_loop')
                     outer_loop_progress, _ = self.outer_loop(seed)
                     self._status.progress += outer_loop_progress
                     if self._status.pbar_outer:
@@ -759,7 +770,7 @@ class ICON:
         if not self.config.manual_config.input_concepts:
             raise ValueError('Please provide a list of manual inputs in manual mode')
         if self.config.manual_config.auto_bases: # Auto bases
-            inputs_bases = [self.models.ret_model(self._status.working_taxo, c, k=self.config.ret_config.retrieve_size) for c in self.config.manual_config.input_concepts]
+            inputs_bases = [self.models.ret_model(self._status.working_taxo.get_label(list(self._status.working_taxo.nodes)), c, k=self.config.ret_config.retrieve_size) for c in self.config.manual_config.input_concepts]
         elif not self.config.manual_config.manual_concept_bases: # No bases
             inputs_bases = [[]] * len(self.config.manual_config.input_concepts)
         elif len(self.config.manual_config.input_concepts) != len(self.config.manual_config.manual_concept_bases): # Manual bases mismatch
@@ -772,16 +783,16 @@ class ICON:
             
         with self._status.pbar_outer:
             for i, newlabel in enumerate(self.config.manual_config.input_concepts):
-                self.print_log(f'Input: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 2, 'cycle')
+                self.print_log(f'Input: {Fore.CYAN}{Style.BRIGHT}{newlabel}{Style.RESET_ALL}', 2, 'outer_loop')
                 self._status.outer_loop_count += 1
                 base = inputs_bases[i]
                 if base == []:
-                    self.print_log('No search base available', 3, 'iter')
+                    self.print_log('No search base available', 3, 'inner_loop')
                 else:
                     plural_str = 'es' if len(base) > 1 else ''
-                    self.print_log(f'Search will be based on the following class{plural_str}:', 3, 'iter')
+                    self.print_log(f'Search will be based on the following class{plural_str}:', 3, 'inner_loop')
                     for b in base:
-                        self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(b)}{Style.RESET_ALL}', 4, 'cycle_classlist')
+                        self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(b)}{Style.RESET_ALL}', 4, 'outer_loop_concept_list')
                         
                 inner_loop_progress = self.inner_loop(newlabel, base)
                 self._status.progress += inner_loop_progress
@@ -833,7 +844,9 @@ class ICON:
             self.manual()
         
         suffix = ' with transitive reduction' if self.config.transitive_reduction else ''
-        progress_str = f' Added {Fore.BLACK}{Style.BRIGHT}{self._status.progress[0]}{Style.RESET_ALL} new classes and {Fore.BLACK}{Style.BRIGHT}{self._status.progress[1]}{Style.RESET_ALL} new direct subsumptions.' if self.config.update_config.do_update else ''
+        plural_node = 's' if self._status.progress[0] > 1 else ''
+        plural_edge = 's' if self._status.progress[1] > 1 else ''
+        progress_str = f' Added {Fore.BLACK}{Style.BRIGHT}{self._status.progress[0]}{Style.RESET_ALL} new class{plural_node} and {Fore.BLACK}{Style.BRIGHT}{self._status.progress[1]}{Style.RESET_ALL} new direct subsumption{plural_edge}.' if self.config.update_config.do_update else ''
         self.print_log(f'Enrichment complete.{progress_str} Begin post-processing{suffix}', 1, 'system')
         if self.config.transitive_reduction:
             tr = nx.transitive_reduction(self._status.working_taxo)
@@ -848,6 +861,6 @@ class ICON:
             self.print_log('Return ICON predictions', 1, 'system')
             output = self._status.logs
         self.clear_lexical_cache(self._status.working_taxo)
-        self._status = _Config.icon_status()
+        self._status = _config.icon_status()
         
         return output

@@ -163,4 +163,4 @@ cython_debug/
 .vscode/
 
 # Testing
-test.ipynb
+*test.ipynb

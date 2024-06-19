@@ -1,6 +1,7 @@
-from typing import List, Union, Tuple, Callable, Dict, Any, Literal
+from typing import List, Union, Tuple, Iterable, Hashable, Callable, Dict, Any, Literal
 from dataclasses import dataclass, field, fields, replace
 from utils.taxo_utils import Taxonomy
+import re
 import numpy as np
 
 @dataclass
@@ -111,6 +112,52 @@ class icon_config(tree_config):
     update_config: icon_update_config = icon_update_config()
     transitive_reduction: bool = True
     logging: Union[bool, int, List[str]]=1
+
+@dataclass
+class iconforcategorymove_ret_config(icon_ret_config):
+    candidate_top_level: int = -1 # absolute levels
+    candidate_bottom_level: int = 1
+    ret_ignore: Union[Iterable[Hashable], re.Pattern] = field(default_factory = list)
+
+@dataclass
+class iconforcategorymove_subgraph_config(icon_subgraph_config):
+    scope_top_level: int = 0
+    scope_bottom_level: int = 1
+    sub_ignore: Union[Iterable[Hashable], re.Pattern] = field(default_factory = list)
+
+@dataclass
+class iconforcategorymove_search_config(icon_search_config):
+    always_search_to_bottom : bool = True
+
+@dataclass
+class iconforcategorymove_sub_config(icon_sub_config):
+    subgraph: iconforcategorymove_subgraph_config = iconforcategorymove_subgraph_config()
+    search: iconforcategorymove_search_config = iconforcategorymove_search_config()
+
+@dataclass
+class iconforcategorymove_selection_config(tree_config):
+    do_select: bool = True
+    always_include_old: bool = True
+    selection_features: List[Literal['parent', 'siblings']] = field(default_factory = list)
+    weights: np.ndarray = np.array([1,1], dtype = float)
+
+@dataclass
+class iconforcategorymove_auto_config(icon_auto_config):
+    ignore: Union[Iterable[Hashable], re.Pattern] = field(default_factory = list)
+
+@dataclass
+class iconforcategorymove_manual_config(icon_manual_config):
+    input_concepts: Iterable[Hashable]=field(default_factory = list)
+
+@dataclass
+class iconforcategorymove_config(icon_config):
+    mode: Literal['auto', 'manual'] = 'auto'
+    method: Literal['search', 'rag'] = 'search'
+    ret_config: iconforcategorymove_ret_config = iconforcategorymove_ret_config()
+    sub_config: iconforcategorymove_sub_config = iconforcategorymove_sub_config()
+    selection_config: iconforcategorymove_selection_config = iconforcategorymove_selection_config()
+    auto_config: iconforcategorymove_auto_config = iconforcategorymove_auto_config()
+    manual_config: iconforcategorymove_manual_config = iconforcategorymove_manual_config()
 
 def locate_arg(conf: tree_config, arg: str) -> str:
 

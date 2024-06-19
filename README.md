@@ -1,10 +1,10 @@
 # ICON 
 
+<img src="assets/diagrams/cover.png" width="375" height="211" />
+
 ICON (**I**mplicit **CON**cept Insertion) is a self-supervised taxonomy enrichment system designed for implicit taxonomy completion.
     
 ICON works by representing new concepts with combinations of existing concepts. It uses a seed to retrieve a cluster of closely related concepts, in order to zoom in on a small facet of the taxonomy. It then enumerates subsets of the cluster and uses a generative model to create a virtual concept for each subset that is expected to represent the subset's semantic union. The generated concept will go through a series of valiadations and its placement in the taxonomy will be decided by a search based on a sequence of subsumption tests. The outcome for each validated concept will be either a new concept inserted into the taxonomy, or a merger with existing concepts. The taxonomy is being updated dynamically each step.
-
-![system-diagram](/assets/diagrams/system.png "Flowchart of ICON")
 
 ## Table of Contents
 
@@ -18,6 +18,7 @@ ICON works by representing new concepts with combinations of existing concepts. 
     - [Running ICON](#running-icon)
     - [Interpreting the outputs](#interpreting-the-outputs)
 - [File IO Format](#file-io-format)
+- [Citation](#citation)
 
 ## Dependencies
 
@@ -50,7 +51,7 @@ The simplest usage of ICON is with Jupyter notebook. A walkthrough tutorial is p
         
 - `data`: A taxonomy (`taxo_utils.Taxonomy` object, which can be loaded from json via `taxo_utils.from_json`, for details see [File IO Format](#file-io-format) or an OWL ontology (`owlready2.Ontology` object)
             
-- `ret_model` (recommended signature: `ret_model(taxo: Taxonomy, query: str, k: int, *args, **kwargs) -> List[Hashable])`: Retrieve the top-*k* concepts most closely related with the query concept in a taxonomy
+- `ret_model` (recommended signature: `ret_model(pool: List[Hashable], query: str, k: int, *args, **kwargs) -> List[Hashable])`: Retrieve the top-*k* concepts most closely related with the query concept in a list of concepts
             
 - `gen_model` (recommended signature: `gen_model(labels: List[str], *args, **kwargs) -> str)`: Generate the union label for an arbitrary set of concept labels
             
@@ -244,3 +245,20 @@ Two arrays `"nodes"` and `"edges"`
     - Any other fields will be stored as edge attributes.
     
 While the only attribute ICON explicitly uses for each node or edge is `"label"`, you can store other attributes, for instance node term embeddings, as additional fields. These attributes will be stored in `Taxonomy` objects. An example file can be found in the data directory [here](/data/raw/google.json).
+
+
+## Citation
+
+If you wish to use ICON for your work, please cite our following paper:
+
+    @inproceedings{10.1145/3589334.3645584,
+    author = {Shi, Jingchuan and Dong, Hang and Chen, Jiaoyan and Wu, Zhe and Horrocks, Ian},
+    title = {Taxonomy Completion via Implicit Concept Insertion},
+    year = {2024},
+    isbn = {9798400701719},
+    publisher = {Association for Computing Machinery},
+    booktitle = {Proceedings of the ACM on Web Conference 2024},
+    pages = {2159–2169},
+    numpages = {11},
+    series = {WWW '24}
+    }

@@ -87,7 +87,7 @@ class SimCSE(object):
                 if self.pooler == "cls":
                     embeddings = outputs.pooler_output
                 elif self.pooler == "cls_before_pooler":
-                    embeddings = outputs.last_hidden_state[:, 0]
+                    embeddings = outputs.last_hidden_state[:, -1]
                 else:
                     raise NotImplementedError
                 if normalize_to_unit:
@@ -192,7 +192,7 @@ class SimCSE(object):
     
     def search(self, queries: Union[str, List[str]], 
                 device: str = None, 
-                threshold: float = 0.6,
+                threshold: float = 0,
                 top_k: int = 5) -> Union[List[Tuple[str, float]], List[List[Tuple[str, float]]]]:
         
         if not self.is_faiss_index:

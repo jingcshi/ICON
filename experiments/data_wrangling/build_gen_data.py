@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append(os.getcwd() + '/..')
+sys.path.append(os.getcwd() + '/../..')
 import re
 import json
 import pandas as pd
@@ -77,15 +77,15 @@ def build_prompt(taxo, classes, shuffle=False,prefix='summarize: '):
         np.random.shuffle(classes)
     prompt = prefix
     for c in classes:
-        prompt = prompt + taxo.get_label(c) + '; '
-    return prompt[:-2]
+        prompt = prompt + taxo.get_label(c) + '[SEP]'
+    return prompt[:-5]
 
 # Create a DataFrame for the raw data.
 def write_to_pandas(taxo,clusters,prefix='summarize: '):
     data = {'text':[],'summary':[]}
     for cluster in clusters:
         data['summary'].append(taxo.nodes[taxo.get_LCA(cluster)[0]]['label'])
-        data['text'].append(build_prompt(taxo,cluster,prefix))
+        data['text'].append(build_prompt(taxo,cluster,prefix=prefix))
     return pd.DataFrame(data)
             
 # Seq2seq data for the training of text generation model.
@@ -144,8 +144,8 @@ if __name__ == '__main__':
     
     now = datetime.now()
     timestr = now.strftime('%Y%m%d-%H%M')
-    train_data.to_csv(f'./../data/gen/{dataset_name}-{timestr}-train.csv',index=False)
+    train_data.to_csv(f'./../../data/gen/{dataset_name}-{timestr}-train.csv',index=False)
     print(f'Training data generated and saved at /data/gen/{dataset_name}-{timestr}-train.csv')
     if eval_data is not None:
-        eval_data.to_csv(f'./../data/gen/{dataset_name}-{timestr}-eval.csv',index=False)
+        eval_data.to_csv(f'./../../data/gen/{dataset_name}-{timestr}-eval.csv',index=False)
         print(f'Evaluation data generated and saved at /data/gen/{dataset_name}-{timestr}-eval.csv')
