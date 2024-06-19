@@ -233,7 +233,6 @@ class ICONforCategoryMove(_icon.ICON):
 
     def rag(self, query: str, old_parent: Optional[Union[str, Iterable[str]]]) -> dict:
 
-        
         return {}
 
     def examine_category(self, target: Hashable) -> None:
