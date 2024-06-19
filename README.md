@@ -65,8 +65,6 @@ If you wish to use the `RET_model` template from `/demo.ipynb`, please temporari
         
 ### Sub-models
 
-**eBay models**: Models fine-tuned on eBay data with the pipeline described below are available at RNO: `/user/jingcshi/ICON_models/`.
-
 We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and well-known pretrained language models to obtain the three required models.
 
 1. Use the scripts under `/experiments/data_wrangling` to build the training and evaluation data for each sub-model using your taxonomy (or the Google PT taxonomy placed there by default).
