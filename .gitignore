@@ -180,3 +180,6 @@ cython_debug/
 
 # LLM
 llm/
+
+# Private evaluation results
+experiments/evaluation/results/**
