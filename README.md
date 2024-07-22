@@ -88,7 +88,7 @@ The `/experiments/data_wrangling/data_config.json` file contains the variable pa
 
     - `eval_split_rate`: The ratio (acceptable range $[0,1)$) of evaluation set in the whole dataset.
 
-2. **RET model:** The data will follow the standard format for contrastive learning that is made of $(q,p,n_1,\ldots,n_k)$ tuples. Each tuple is called a *minibatch*. $q$ is the query concept; $p$ is the positive concept, a concept similar to the query (in our case a *sibling* of the query in the taxonomy); $n_1,\ldots ,n_k$ are the negative concepts which should be concepts that are dissimilar to the query. A sample data is provided [here](./data/ret/google-eval.csv).
+2. **EMB model:** The data will follow the standard format for contrastive learning that is made of $(q,p,n_1,\ldots,n_k)$ tuples. Each tuple is called a *minibatch*. $q$ is the query concept; $p$ is the positive concept, a concept similar to the query (in our case a *sibling* of the query in the taxonomy); $n_1,\ldots ,n_k$ are the negative concepts which should be concepts that are dissimilar to the query. A sample data is provided [here](./data/emb/google-eval.csv).
 
     - `concept_appearance_per_file`: How many times each concept in the taxonomy appears in the data.
 
