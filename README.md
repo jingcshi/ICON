@@ -57,10 +57,6 @@ The simplest usage of ICON is with Jupyter notebook. A walkthrough tutorial is p
 - `sub_model` (recommended signature: `sub_model(sub: Union[str, List[str]], sup: Union[str, List[str]], *args, **kwargs) -> numpy.ndarray)`: Predict whether each `sup` subsumes the corresponding `sub` given two lists of `sub` and `sup`
 
 The sub-models are essential plug-ins for ICON. Everything above (except `emb_model` or `gen_model` if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
-
-#### Replace simcse script
-
-If you wish to use the `RET_model` template from `/demo.ipynb`, please temporarily replace the `tool.py` in your SimCSE directory with `/utils/replace_simcse/tool.py`. The original SimCSE package displays some loggings and progress bars that are unnecessary for ICON's purposes, and the file replacement would suppress these outputs without affecting other functionalities.
         
 ### Sub-models
 
