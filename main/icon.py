@@ -388,8 +388,6 @@ class ICON:
         if (isinstance(setting,bool) and setting == True) or (isinstance(setting,int) and setting >= level) or (isinstance(setting,list) and msgtype in setting):
             indent = max(level-1, 0)
             print('\t' * indent + msg, end = '\n' if newline else '')
-            return 1
-        return 0
 
     def update_config(self, **kwargs) -> None:
         
