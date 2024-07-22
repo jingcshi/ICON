@@ -41,7 +41,7 @@ class ICONforCategoryMove(_icon.ICON):
     
     def __init__(self, 
                 data: Union[Taxonomy,o2.Ontology]=None,
-                ret_model=None,
+                emb_model=None,
                 gen_model=None,
                 sub_model=None,
                 mode: Literal['auto', 'manual']='auto',
@@ -54,6 +54,7 @@ class ICONforCategoryMove(_icon.ICON):
                 candidate_top_level: int=-1,
                 candidate_bottom_level: int=1,
                 ret_ignore: Union[Iterable[Hashable], re.Pattern]=[],
+                do_generate: bool=False,
                 scope_top_level: int=0,
                 scope_bottom_level: int=1,
                 sub_ignore: Union[Iterable[Hashable], re.Pattern]=[],
@@ -72,7 +73,7 @@ class ICONforCategoryMove(_icon.ICON):
         if isinstance(data,o2.Ontology):
             data = Taxonomy.from_ontology(data)
         self.data = data
-        self.models = _config.icon_models(ret_model,gen_model,sub_model)
+        self.models = _config.icon_models(emb_model,gen_model,sub_model)
         self._caches = _config.icon_caches()
         self._status = _config.icon_status()
         self.config = _config.iconforcategorymove_config(mode=mode,
@@ -81,6 +82,7 @@ class ICONforCategoryMove(_icon.ICON):
                                 auto_config=_config.iconforcategorymove_auto_config(max_outer_loop=max_outer_loop, ignore=ignore),
                                 manual_config=_config.icon_manual_config(input_concepts),
                                 ret_config=_config.iconforcategorymove_ret_config(retrieve_size=retrieve_size, candidate_top_level=candidate_top_level, candidate_bottom_level=candidate_bottom_level, ret_ignore=ret_ignore),
+                                gen_config=_config.iconforcategorymove_gen_config(do_generate=do_generate),
                                 sub_config=_config.iconforcategorymove_sub_config(
                                     _config.iconforcategorymove_subgraph_config(scope_top_level=scope_top_level, scope_bottom_level=scope_bottom_level, sub_ignore=sub_ignore),
                                     _config.iconforcategorymove_search_config(threshold=threshold, tolerance=tolerance, force_prune=force_prune, always_search_to_bottom=always_search_to_bottom)),
@@ -147,6 +149,37 @@ class ICONforCategoryMove(_icon.ICON):
         
         return sup
 
+    def similarity(self, query: Union[Hashable, List[Hashable]], key: Union[Hashable, List[Hashable]]) -> Union[float, np.ndarray]:
+
+        Q = self.entity_to_unit_vector(query)
+        K = self.entity_to_unit_vector(key)
+        S = np.dot(Q, K.T).squeeze()
+        if len(S.shape) == 0:
+            return S.item()
+        return S
+
+    def entity_to_unit_vector(self, ent: Union[Hashable, List[Hashable]]) -> np.ndarray:
+
+        vecs = []
+        vstore = self._caches.vector_store[id(self._status.working_taxo)]
+        if isinstance(ent, Hashable):
+            ent = [ent]
+        for e in ent:
+            if e in vstore.concepts: # Query is a concept has its embedding has been computed and stored
+                vecs.append(vstore.reconstruct(e))
+            elif e in self._status.working_taxo.nodes: # Query is concept but its embedding has not yet been computed
+                v = self.models.emb_model(self._status.working_taxo.get_label(e))
+                vstore.add(v, e)
+                vecs.append(v)
+            elif isinstance(e, str): # Query is a string
+                v = self.models.emb_model(e)
+                vecs.append(v)
+            else:
+                raise TypeError('Entity must be either a concept or an embeddable object (e.g. string)')
+        V = np.vstack(vecs)
+        V = V / np.linalg.norm(V, axis=1, keepdims=True)
+        return V
+
     def move(self, target: Hashable, new_parent: Union[List[Hashable], Hashable], old_parent: Optional[Union[List[Hashable], Hashable]] = None) -> None:
 
         single_new = isinstance(new_parent, Hashable)
@@ -206,7 +239,7 @@ class ICONforCategoryMove(_icon.ICON):
             if len(siblings) == 0:
                 scores[i] = 0.0
             else:
-                scores[i] = np.mean(self.models.ret_model.similarity(query, self._status.working_taxo.get_label(siblings)))
+                scores[i] = np.mean(self.similarity(query, siblings))
         return scores
 
     def select(self, query: str, candidate: List[Hashable]) -> Hashable:
@@ -229,9 +262,9 @@ class ICONforCategoryMove(_icon.ICON):
                 current_column += 1
         final_scores = np.dot(scores, self.config.selection_config.weights)
         winner = candidate[np.argmax(final_scores)]
-        return [winner]        
+        return [winner]
 
-    def rag(self, query: str, old_parent: Optional[Union[str, Iterable[str]]]) -> dict:
+    def rag(self, query: str, old_parent: Optional[Iterable[str]]) -> dict:
 
         return {}
 
@@ -256,7 +289,7 @@ class ICONforCategoryMove(_icon.ICON):
                 subtaxo = self._status.working_taxo.create_move_search_space(target, self.config.sub_config.subgraph.scope_top_level, self.config.sub_config.subgraph.scope_bottom_level)
                 candidates = list(self.search(subtaxo, self._status.working_taxo.get_label(target)))
             elif self.config.method == 'rag':
-                candidates = list(self.rag(self._status.working_taxo.get_label(target), self._status.working_taxo.get_label(old_parent)))
+                candidates = list(self.rag(self._status.working_taxo.get_label(target), old_parent))
             if self.config.selection_config.always_include_old:
                 candidates = list(set(candidates).union(set(old_parent)))
             self.print_log(f'Found {Fore.BLACK}{Style.BRIGHT}{len(candidates)}{Style.RESET_ALL} candidate{"" if len(candidates) == 1 else "s"} with {self.config.method}', 3, 'outer_loop_details')
@@ -296,6 +329,8 @@ class ICONforCategoryMove(_icon.ICON):
                 movable = [l for l in leaves if not self.config.auto_config.ignore.match(self._status.working_taxo.get_label(l))]
             else:
                 movable = list(set(leaves).difference(self.config.auto_config.ignore))
+        else:
+            movable = leaves
         total = min(len(movable), self.config.auto_config.max_outer_loop) if self.config.auto_config.max_outer_loop else len(movable)
         self._status.pbar_outer.reset(total = total)
         self._status.pbar_outer.set_description('Auto mode')
@@ -345,13 +380,21 @@ class ICONforCategoryMove(_icon.ICON):
             if self.models.sub_model is None:
                 raise ModuleNotFoundError(f'sub_model is required to run on search method')               
         elif self.config.method == 'rag':
-            if self.models.ret_model is None:
-                raise ModuleNotFoundError(f'ret_model is required to run on rag method')
+            if self.models.emb_model is None:
+                raise ModuleNotFoundError(f'emb_model is required to run on rag method')
             if self.models.sub_model is None:
                 raise ModuleNotFoundError(f'sub_model is required to run on rag method')
         else:
             raise ValueError(f'Invalid method: {self.config.method}. Please choose from "search" or "rag"')
         
+        if self.config.method == 'rag' or 'siblings' in self.config.selection_config.selection_features: # Need to build a vector index
+            if self.check_vector_index_available(self._status.working_taxo):
+                self.print_log('Found pre-computed vector index', 1, 'system')
+            else:
+                self.print_log('Building vector index...', 1, 'system', newline=False)
+                self.build_vector_index(self._status.working_taxo)
+                self.print_log('Complete', 1, 'system')
+
         if self.config.mode == 'auto':
             self.auto()
         elif self.config.mode == 'manual':

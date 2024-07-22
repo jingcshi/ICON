@@ -31,7 +31,7 @@ class tree_config:
 
 @dataclass
 class icon_models(tree_config):
-    ret_model: Any = None
+    emb_model: Any = None
     gen_model: Any = None
     sub_model: Any = None
 
@@ -39,6 +39,7 @@ class icon_models(tree_config):
 class icon_caches(tree_config):
     lexical_cache: Dict = field(default_factory = dict)
     sub_score_cache: Dict = field(default_factory = dict)
+    vector_store: Dict = field(default_factory = dict)
 
 @dataclass
 class icon_status(tree_config):
@@ -48,7 +49,7 @@ class icon_status(tree_config):
     pbar_outer: Any = None
     pbar_inner: Any = None
     working_taxo: Taxonomy = None
-    progress: np.ndarray = np.array([0,0], dtype = int)
+    progress: np.ndarray = field(default_factory = lambda: np.array([0,0], dtype = float))
     logs: Dict = field(default_factory = dict)
 
 @dataclass
@@ -90,8 +91,8 @@ class icon_search_config(tree_config):
     
 @dataclass
 class icon_sub_config(tree_config):
-    subgraph: icon_subgraph_config = icon_subgraph_config()
-    search: icon_search_config = icon_search_config()
+    subgraph: icon_subgraph_config = field(default_factory=lambda: icon_subgraph_config())
+    search: icon_search_config = field(default_factory=lambda: icon_search_config())
 
 @dataclass
 class icon_update_config(tree_config):
@@ -103,13 +104,13 @@ class icon_update_config(tree_config):
 class icon_config(tree_config):
     mode: Literal['auto', 'semiauto', 'manual']='auto'
     rand_seed: Any = 114514
-    auto_config: icon_auto_config = icon_auto_config()
-    semiauto_config: icon_semiauto_config = icon_semiauto_config()
-    manual_config: icon_manual_config = icon_manual_config()
-    ret_config: icon_ret_config = icon_ret_config()
-    gen_config: icon_gen_config = icon_gen_config()
-    sub_config: icon_sub_config = icon_sub_config()
-    update_config: icon_update_config = icon_update_config()
+    auto_config: icon_auto_config = field(default_factory=lambda: icon_auto_config())
+    semiauto_config: icon_semiauto_config = field(default_factory=lambda: icon_semiauto_config())
+    manual_config: icon_manual_config = field(default_factory=lambda: icon_manual_config())
+    ret_config: icon_ret_config = field(default_factory=lambda: icon_ret_config())
+    gen_config: icon_gen_config = field(default_factory=lambda: icon_gen_config())
+    sub_config: icon_sub_config = field(default_factory=lambda: icon_sub_config())
+    update_config: icon_update_config = field(default_factory=lambda: icon_update_config())
     transitive_reduction: bool = True
     logging: Union[bool, int, List[str]]=1
 
@@ -118,6 +119,10 @@ class iconforcategorymove_ret_config(icon_ret_config):
     candidate_top_level: int = -1 # absolute levels
     candidate_bottom_level: int = 1
     ret_ignore: Union[Iterable[Hashable], re.Pattern] = field(default_factory = list)
+
+@dataclass
+class iconforcategorymove_gen_config(icon_gen_config):
+    do_generate: bool = False
 
 @dataclass
 class iconforcategorymove_subgraph_config(icon_subgraph_config):
@@ -131,15 +136,15 @@ class iconforcategorymove_search_config(icon_search_config):
 
 @dataclass
 class iconforcategorymove_sub_config(icon_sub_config):
-    subgraph: iconforcategorymove_subgraph_config = iconforcategorymove_subgraph_config()
-    search: iconforcategorymove_search_config = iconforcategorymove_search_config()
+    subgraph: iconforcategorymove_subgraph_config = field(default_factory=lambda: iconforcategorymove_subgraph_config())
+    search: iconforcategorymove_search_config = field(default_factory=lambda: iconforcategorymove_search_config())
 
 @dataclass
 class iconforcategorymove_selection_config(tree_config):
     do_select: bool = True
     always_include_old: bool = True
     selection_features: List[Literal['parent', 'siblings']] = field(default_factory = list)
-    weights: np.ndarray = np.array([1,1], dtype = float)
+    weights: np.ndarray = field(default_factory = lambda: np.array([1,1], dtype = float))
 
 @dataclass
 class iconforcategorymove_auto_config(icon_auto_config):
@@ -153,11 +158,12 @@ class iconforcategorymove_manual_config(icon_manual_config):
 class iconforcategorymove_config(icon_config):
     mode: Literal['auto', 'manual'] = 'auto'
     method: Literal['search', 'rag'] = 'search'
-    ret_config: iconforcategorymove_ret_config = iconforcategorymove_ret_config()
-    sub_config: iconforcategorymove_sub_config = iconforcategorymove_sub_config()
-    selection_config: iconforcategorymove_selection_config = iconforcategorymove_selection_config()
-    auto_config: iconforcategorymove_auto_config = iconforcategorymove_auto_config()
-    manual_config: iconforcategorymove_manual_config = iconforcategorymove_manual_config()
+    ret_config: iconforcategorymove_ret_config = field(default_factory=lambda: iconforcategorymove_ret_config())
+    gen_config: iconforcategorymove_gen_config = field(default_factory=lambda: iconforcategorymove_gen_config())
+    sub_config: iconforcategorymove_sub_config = field(default_factory=lambda: iconforcategorymove_sub_config())
+    selection_config: iconforcategorymove_selection_config = field(default_factory=lambda: iconforcategorymove_selection_config())
+    auto_config: iconforcategorymove_auto_config = field(default_factory=lambda: iconforcategorymove_auto_config())
+    manual_config: iconforcategorymove_manual_config = field(default_factory=lambda: iconforcategorymove_manual_config())
 
 def locate_arg(conf: tree_config, arg: str) -> str:
 

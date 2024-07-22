@@ -27,6 +27,7 @@ ICON depends on the following packages:
 - `numpy`
 - `owlready2`
 - `networkx`
+- `faiss`
 - `tqdm`
 - `nltk`
         
@@ -39,9 +40,7 @@ The pipeline for training sub-models that we provide in this README further depe
 - `evaluate`
 - `info-nce-pytorch`
 
-Furthermore, the package `simcse` is required if you wish to use the [official demonstration notebook](./demo.ipynb).
-
-Current dependency conflicts suggest that ICON runs best with **Python 3.8**.
+ICON requires **Python 3.9** or higher.
 
 ## Usage
 
@@ -51,13 +50,13 @@ The simplest usage of ICON is with Jupyter notebook. A walkthrough tutorial is p
         
 - `data`: A taxonomy (`taxo_utils.Taxonomy` object, which can be loaded from json via `taxo_utils.from_json`, for details see [File IO Format](#file-io-format) or an OWL ontology (`owlready2.Ontology` object)
             
-- `ret_model` (recommended signature: `ret_model(pool: List[Hashable], query: str, k: int, *args, **kwargs) -> List[Hashable])`: Retrieve the top-*k* concepts most closely related with the query concept in a list of concepts
+- `emb_model` (recommended signature: `emb_model(query: List[str], *args, **kwargs) -> np.ndarray)`: Embedding model for one or a batch of sentences
             
 - `gen_model` (recommended signature: `gen_model(labels: List[str], *args, **kwargs) -> str)`: Generate the union label for an arbitrary set of concept labels
             
 - `sub_model` (recommended signature: `sub_model(sub: Union[str, List[str]], sup: Union[str, List[str]], *args, **kwargs) -> numpy.ndarray)`: Predict whether each `sup` subsumes the corresponding `sub` given two lists of `sub` and `sup`
 
-The sub-models are essential plug-ins for ICON. Everything above (except `ret_model` or `gen_model` if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
+The sub-models are essential plug-ins for ICON. Everything above (except `emb_model` or `gen_model` if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
 
 #### Replace simcse script
 
@@ -75,7 +74,7 @@ We offer a quick pipeline for fine-tuning (roughly year 2020 strength) solid and
 
     3. Execute the scripts with `python ./FILENAME.py` where `FILENAME` is replaced by the name of the script you wish to run.
 
-2. Download the pretrained language models from HuggingFace. Here we use [BERT](https://huggingface.co/bert-base-cased) for both ret_model and sub_model, and [T5](https://huggingface.co/t5-base) for gen_model.
+2. Download the pretrained language models from HuggingFace. Here we use [BERT](https://huggingface.co/bert-base-cased) for both emb_model and sub_model, and [T5](https://huggingface.co/t5-base) for gen_model.
 
 3. Fine-tune the pretrained language models. A demonstration for fine-tuning each model can be found in the notebooks under `/experiments/model_training`. Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at `/demo.ipynb`.
 
@@ -119,7 +118,7 @@ The `/experiments/data_wrangling/data_config.json` file contains the variable pa
     
 ### Configurations
         
-Once you are ready, initialise an ICON object with your preferred configurations. If you just want to see ICON at work, use all the default configurations by e.g. `iconobj = ICON(data=your_data, ret_model=your_ret_model, gen_model=your_gen_model, sub_model=your_sub_model)` followed by `iconobj.run()` (this will trigger auto mode, see below). A complete list of configurations is provided as follows:
+Once you are ready, initialise an ICON object with your preferred configurations. If you just want to see ICON at work, use all the default configurations by e.g. `iconobj = ICON(data=your_data, emb_model=your_emb_model, gen_model=your_gen_model, sub_model=your_sub_model)` followed by `iconobj.run()` (this will trigger auto mode, see below). A complete list of configurations is provided as follows:
 
 - `mode`: Select one of the following
         
@@ -149,11 +148,11 @@ Once you are ready, initialise an ICON object with your preferred configurations
         
     - `manual_concept_bases`: If provided, each entry will become the search bases for the corresponding input concept.
         
-    - `auto_bases`: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, `ret_model` will not be required.
+    - `auto_bases`: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, `emb_model` will not be required.
         
 - Retrieval config:
     
-    - `retrieve_size`: The number of concepts `ret_model` will retrieve for each query. This will be passed to `ret_model` as the argument named `k`.
+    - `retrieve_size`: The number of concepts to retrieve for each query.
         
     - `restrict_combinations`: Whether you want restrict the subsets under consideration to those including the seed concept.
         
