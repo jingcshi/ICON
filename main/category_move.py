@@ -266,7 +266,23 @@ class ICONforCategoryMove(_icon.ICON):
 
     def rag(self, query: str, old_parent: Optional[Iterable[str]]) -> dict:
 
-        return {}
+        if self.config.gen_config.do_generate:
+            guess_parent = self.models.gen_model(query) # Expected to return List[str], a list of candidate parent names
+        elif old_parent:
+            guess_parent = old_parent
+        else:
+            raise ValueError('Either old parents must be provided or do_generate must be True')
+        
+        q = self.entity_to_unit_vector(guess_parent)
+        subset = self._status.working_taxo.filter_by_level(self.config.ret_config.candidate_top_level, self.config.ret_config.candidate_top_level, set)
+        if self.config.ret_config.ret_ignore:
+            if isinstance(self.config.ret_config.ret_ignore, re.Pattern):
+                subset = [l for l in subset if not self.config.ret_config.ret_ignore.match(self._status.working_taxo.get_label(l))]
+            else:
+                subset = list(subset.difference(self.config.ret_config.ret_ignore))
+        _, indices = self._caches.vector_store[id(self._status.working_taxo)].search(q,k=self.config.ret_config.retrieve_size,subset=subset,exhaustive=True)
+        candidates = set(indices.reshape(-1))
+        return list(candidates)
 
     def examine_category(self, target: Hashable) -> None:
             
