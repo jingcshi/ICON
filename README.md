@@ -11,7 +11,6 @@ ICON works by representing new concepts with combinations of existing concepts. 
 - [Dependencies](#dependencies)
 - [Usage](#usage)
     - [Preliminaries](#preliminaries)
-        - [Replace simcse script](#replace-simcse-script)
     - [Sub-models](#sub-models)
         - [Fine-tuning data](#fine-tuning-data)
     - [Configurations](#configurations)
