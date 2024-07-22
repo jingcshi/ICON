@@ -1,6 +1,6 @@
 {
     "random_seed": null,
-    "ret": {
+    "emb": {
         "data_path": "./../../data/raw/ebay_us_nonleaf.json",
         "eval_split_rate": 0.1,
         "concept_appearance_per_file": 2,

@@ -105,14 +105,14 @@ if __name__ == '__main__':
     with open('./data_config.json') as inf:
         config = json.loads(inf.read())
         
-    path = config['ret']['data_path']
+    path = config['emb']['data_path']
     rand_seed = config['random_seed']
-    eval_split_rate = config['ret']['eval_split_rate']
-    concept_appearance_per_file = config['ret']['concept_appearance_per_file']
-    negative_per_minibatch = config['ret']['negative_per_minibatch']
-    config['ret']['random_seed'] = rand_seed
+    eval_split_rate = config['emb']['eval_split_rate']
+    concept_appearance_per_file = config['emb']['concept_appearance_per_file']
+    negative_per_minibatch = config['emb']['negative_per_minibatch']
+    config['emb']['random_seed'] = rand_seed
     
-    print(f'Generating RET model data with the following configurations:\n{config["ret"]}')
+    print(f'Generating RET model data with the following configurations:\n{config["emb"]}')
     
     data = _taxonomy.from_json(path)
     dataset_name = re.findall(r'/(\w+).json$',path)[0]
@@ -127,8 +127,8 @@ if __name__ == '__main__':
     
     now = datetime.now()
     timestr = now.strftime('%Y%m%d-%H%M')
-    train_data.to_csv(f'./../../data/ret/{dataset_name}-{timestr}-train.csv',index=False)
-    print(f'Training data generated and saved at /data/ret/{dataset_name}-{timestr}-train.csv')
+    train_data.to_csv(f'./../../data/emb/{dataset_name}-{timestr}-train.csv',index=False)
+    print(f'Training data generated and saved at /data/emb/{dataset_name}-{timestr}-train.csv')
     if eval_data is not None:
-        eval_data.to_csv(f'./../../data/ret/{dataset_name}-{timestr}-eval.csv',index=False)
-        print(f'Evaluation data generated and saved at /data/ret/{dataset_name}-{timestr}-eval.csv')
+        eval_data.to_csv(f'./../../data/emb/{dataset_name}-{timestr}-eval.csv',index=False)
+        print(f'Evaluation data generated and saved at /data/emb/{dataset_name}-{timestr}-eval.csv')
