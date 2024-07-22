@@ -13,7 +13,7 @@ from tqdm.notebook import tqdm
 from utils.log_style import Fore, Style
 from utils.taxo_utils import Taxonomy
 from utils.tokenset_utils import tokenset
-import utils.concept_repr as _repr
+from utils.vector_index import FaissVectorStore
 import main.config as _config
 
 class NullContext:
@@ -40,11 +40,11 @@ class ICON:
     
         ICON depends on the following packages:
         
-            numpy, torch, owlready2, networkx, tqdm, nltk, colorama
+            numpy, owlready2, networkx, faiss, tqdm, nltk
             
         The pipeline for training sub-models that we provide in this README further depends on the following packages:
         
-            transformers, datasets, evaluate, info_nce
+            torch, transformers, datasets, evaluate, info_nce
     
     Usage:
     
@@ -54,13 +54,13 @@ class ICON:
             
                 data: A taxonomy (taxo_utils.Taxonomy object, which can be loaded from json via taxo_utils.from_json, for details see the File IO Format section) or an OWL ontology (owlready2.Ontology object)
                 
-                ret_model (recommended signature: ret_model(taxo: Taxonomy, query: str, k: int, *args, **kwargs) -> List[Hashable]): Retrieve the top-k concepts most closely related with the query concept in a taxonomy
+                emb_model (recommended signature: emb_model(query: List[str], *args, **kwargs) -> np.ndarray): Embedding model for one or a batch of sentences
                 
                 gen_model (recommended signature: gen_model(labels: List[str], *args, **kwargs) -> str): Generate the union label for an arbitrary set of concept labels
                 
                 sub_model (recommended signature: sub_model(sub: Union[str, List[str]], sup: Union[str, List[str]], *args, **kwargs) -> numpy.ndarray): Predict whether each sup subsumes the corresponding sub given two lists of sub and sup
 
-            The sub-models are essential plug-ins for ICON. Everything above (except ret_model or gen_model if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
+            The sub-models are essential plug-ins for ICON. Everything above (except emb_model or gen_model if you are using ICON in a particular setting, to be explained below) will be required for ICON to function.
             
         I don't have these models
         
@@ -68,7 +68,7 @@ class ICON:
             
             Open each notebook under /data_wrangling and follow the instructions to build the training data for each sub-model using your taxonomy (or the Google PT taxonomy placed there by default). You should get two files under /data/ret, /data/gen and /data/sub each. One of them is for training and the other for evaluation.
             
-            Next, download the pretrained language models from HuggingFace. Let's use BERT for both ret_model and sub_model, and T5 for gen_model.
+            Next, download the pretrained language models from HuggingFace. Let's use BERT for both emb_model and sub_model, and T5 for gen_model.
             
             Finally, fine-tune each pretrained model using the corresponding notebook under /model_training . Notice that the tuned language models aren't exactly the sub-models to be called by ICON yet. An example of wrapping the models for ICON and an entire run can be found at /demo.ipynb.
         
@@ -106,11 +106,11 @@ class ICON:
                     
                     manual_concept_bases: If provided, each entry will become the search bases for the corresponding input concept.
                     
-                    auto_bases: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, ret_model will not be required.
+                    auto_bases: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, emb_model will not be required.
                     
                 Retrieval config:
                 
-                    retrieve_size: The number of concepts ret_model will retrieve for each query. This will be passed to ret_model as the argument named k.
+                    retrieve_size: The number of concepts to retrieve for each query.
                     
                     restrict_combinations: Whether you want restrict the subsets under consideration to those including the seed concept.
                     
@@ -185,7 +185,7 @@ class ICON:
     
     def __init__(self,
                 data: Union[Taxonomy,o2.Ontology]=None,
-                ret_model=None,
+                emb_model=None,
                 gen_model=None,
                 sub_model=None,
                 mode: Literal['auto', 'semiauto', 'manual']='auto',
@@ -245,11 +245,11 @@ class ICON:
                 
                 manual_concept_bases: If provided, each entry will become the search bases for the corresponding input concept.
                 
-                auto_bases: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, ret_model will not be required.
+                auto_bases: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, emb_model will not be required.
                 
             Retrieval config:
             
-                retrieve_size: The number of concepts ret_model will retrieve for each query. This will be passed to ret_model as the argument named k.
+                retrieve_size: The number of concepts to retrieve for each query.
                 
                 restrict_combinations: Whether you want restrict the subsets under consideration to those including the seed concept.
                 
@@ -290,7 +290,7 @@ class ICON:
         if isinstance(data,o2.Ontology):
             data = Taxonomy.from_ontology(data)
         self.data = data
-        self.models = _config.icon_models(ret_model,gen_model,sub_model)
+        self.models = _config.icon_models(emb_model,gen_model,sub_model)
         self._caches = _config.icon_caches()
         self._status = _config.icon_status()
         self.config = _config.icon_config(mode,
@@ -340,6 +340,37 @@ class ICON:
         except KeyError:
             return None
     
+    def check_vector_index_available(self, taxo: Taxonomy, replace_if_found: bool=True) -> bool:
+
+        for vs in self._caches.vector_store:
+            if self._caches.vector_store[vs].concepts == set(taxo.nodes):
+                if replace_if_found:
+                    self._caches.vector_store[id(taxo)] = self._caches.vector_store.pop(vs)
+                return True
+        return False
+
+    def build_vector_index(self, taxo: Taxonomy) -> None:
+        
+        concepts = list(taxo.nodes())
+        sentences = self.models.emb_model(taxo.get_label(concepts))
+        self._caches.vector_store[id(taxo)] = FaissVectorStore(sentences, concepts)
+
+    def add_concepts_to_vector_index(self, taxo: Taxonomy, c: Union[Hashable, List[Hashable]]) -> None:
+
+        sentence = self.models.emb_model(taxo.get_label(c))
+        self._caches.vector_store[id(taxo)].add(sentence, c)
+    
+    def remove_concepts_from_vector_index(self, taxo: Taxonomy, c: Union[Hashable, List[Hashable]]) -> None:
+
+        self._caches.vector_store[id(taxo)].delete(c)
+
+    def clear_vector_index(self, taxo: Taxonomy=None) -> None:
+
+        if taxo == None:
+            self._caches.vector_store = {}
+        else:
+            self._caches.vector_store.pop(id(taxo), None)
+
     def update_sub_score_cache(self, sub: List[str], sup: List[str]) -> None:
         
         # The model output is expected to be a numpy.array of shape [len(sub)]
@@ -351,12 +382,12 @@ class ICON:
         
         self._caches.sub_score_cache = {}
     
-    def print_log(self, msg: str, level: int, msgtype: str) -> Literal[0,1]:
+    def print_log(self, msg: str, level: int, msgtype: str, newline = True) -> Literal[0,1]:
         
         setting = self.config.logging
         if (isinstance(setting,bool) and setting == True) or (isinstance(setting,int) and setting >= level) or (isinstance(setting,list) and msgtype in setting):
             indent = max(level-1, 0)
-            print('\t' * indent + msg)
+            print('\t' * indent + msg, end = '\n' if newline else '')
             return 1
         return 0
 
@@ -672,19 +703,12 @@ class ICON:
         outer_loop_progress = np.array([0,0],dtype=int)
     
         # Retrieve a set of relevant classes from the KNN model, henceforth referred to as base_classes
-        base_classes = self.models.ret_model(self._status.working_taxo.get_label(list(self._status.working_taxo.nodes)), self._status.working_taxo.get_label(seed), k=self.config.ret_config.retrieve_size)
-        # base_classes = self.models.ret_model(self._status.working_taxo, self._status.working_taxo.get_label(seed), k=1+self.config.ret_config.retrieve_size)
-        # if seed in base_classes:
-        #     base_classes.remove(seed)
-        #     base_classes = base_classes[:-1]
-        #     base_classes = [seed] + base_classes
-        # else:
-        #     base_classes = [seed] + base_classes[:-2]
+        vstore = self._caches.vector_store[id(self._status.working_taxo)]
+        _, base_classes = vstore.search(vstore.reconstruct(seed), k=self.config.ret_config.retrieve_size, exhaustive=True)
+        base_classes = base_classes.tolist()
         self.print_log(f'Retrieved {Fore.BLACK}{Style.BRIGHT}{len(base_classes)}{Style.RESET_ALL} classes', 3, 'outer_loop_details')
         for c in base_classes:
             self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(c)}{Style.RESET_ALL}', 4, 'outer_loop_concept_list')
-        
-
 
         # Use base class pairs as prompt for the GEN model to generate new class names
         if self.config.ret_config.restrict_combinations:
@@ -717,6 +741,12 @@ class ICON:
     def auto(self, **kwargs) -> None:
         
         self.update_config(**kwargs)
+        if self.check_vector_index_available(self._status.working_taxo):
+            self.print_log('Found pre-computed vector index', 1, 'system')
+        else:
+            self.print_log('Building vector index...', 1, 'system', newline=False)
+            self.build_vector_index(self._status.working_taxo)
+            self.print_log('Complete', 1, 'system')
         seedpool = self._status.working_taxo.get_LCA([],return_type=set)
         poolsize = len(seedpool)
         if not self.config.auto_config.max_outer_loop:
@@ -753,7 +783,13 @@ class ICON:
         if self._status.pbar_outer:
             self._status.pbar_outer.reset(total=len(self.config.semiauto_config.semiauto_seeds))
             self._status.pbar_outer.set_description('Semiauto mode')
-            
+        
+        if self.check_vector_index_available(self._status.working_taxo):
+            self.print_log('Found pre-computed vector index', 1, 'system')
+        else:
+            self.print_log('Building vector index...', 1, 'system', newline=False)
+            self.build_vector_index(self._status.working_taxo)
+            self.print_log('Complete', 1, 'system')
         with self._status.pbar_outer:
             with self._status.pbar_inner:
                 for seed in self.config.semiauto_config.semiauto_seeds:
@@ -770,7 +806,15 @@ class ICON:
         if not self.config.manual_config.input_concepts:
             raise ValueError('Please provide a list of manual inputs in manual mode')
         if self.config.manual_config.auto_bases: # Auto bases
-            inputs_bases = [self.models.ret_model(self._status.working_taxo.get_label(list(self._status.working_taxo.nodes)), c, k=self.config.ret_config.retrieve_size) for c in self.config.manual_config.input_concepts]
+            if self.check_vector_index_available(self._status.working_taxo):
+                self.print_log('Found pre-computed vector index', 1, 'system')
+            else:
+                self.print_log('Building vector index...', 1, 'system', newline=False)
+                self.build_vector_index(self._status.working_taxo)
+                self.print_log('Complete', 1, 'system')
+            vstore = self._caches.vector_store[id(self._status.working_taxo)]
+            _, input_bases = vstore.search(vstore.reconstruct(self.config.manual_config.input_concepts), k=self.config.ret_config.retrieve_size, exhaustive=True)
+            input_bases = input_bases.tolist()
         elif not self.config.manual_config.manual_concept_bases: # No bases
             inputs_bases = [[]] * len(self.config.manual_config.input_concepts)
         elif len(self.config.manual_config.input_concepts) != len(self.config.manual_config.manual_concept_bases): # Manual bases mismatch
@@ -839,8 +883,8 @@ class ICON:
         else:
             if self.models.sub_model is None:
                 raise ModuleNotFoundError(f'sub_model is required to run manual mode')
-            elif self.config.manual_config.auto_bases and self.models.ret_model is None:
-                raise ModuleNotFoundError(f'ret_model is required to run manual mode with auto_bases == True')
+            elif self.config.manual_config.auto_bases and self.models.emb_model is None:
+                raise ModuleNotFoundError(f'emb_model is required to run manual mode with auto_bases == True')
             self.manual()
         
         suffix = ' with transitive reduction' if self.config.transitive_reduction else ''
