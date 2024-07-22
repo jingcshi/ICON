@@ -182,4 +182,4 @@ cython_debug/
 llm/
 
 # Private evaluation results
-experiments/evaluation/results/**
+experiments/evaluation/results/
