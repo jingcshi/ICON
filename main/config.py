@@ -1,4 +1,4 @@
-from typing import List, Union, Tuple, Iterable, Hashable, Callable, Dict, Any, Literal
+from typing import List, Union, Tuple, Optional, Iterable, Hashable, Callable, Dict, Any, Literal
 from dataclasses import dataclass, field, fields, replace
 from utils.taxo_utils import Taxonomy
 import re
@@ -113,6 +113,10 @@ class icon_config(tree_config):
     update_config: icon_update_config = field(default_factory=lambda: icon_update_config())
     transitive_reduction: bool = True
     logging: Union[bool, int, List[str]]=1
+
+@dataclass
+class iconforcategorymove_caches(icon_caches):
+    rag_eligible_candidate: Optional[List[Hashable]] = None
 
 @dataclass
 class iconforcategorymove_ret_config(icon_ret_config):
