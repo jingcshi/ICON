@@ -74,7 +74,7 @@ class ICONforCategoryMove(_icon.ICON):
             data = Taxonomy.from_ontology(data)
         self.data = data
         self.models = _config.icon_models(emb_model,gen_model,sub_model)
-        self._caches = _config.icon_caches()
+        self._caches = _config.iconforcategorymove_caches()
         self._status = _config.icon_status()
         self.config = _config.iconforcategorymove_config(mode=mode,
                                 method=method,
@@ -90,65 +90,6 @@ class ICONforCategoryMove(_icon.ICON):
                                 update_config=_config.icon_update_config(do_update=do_update),
                                 logging=logging)
     
-    def search(self, taxo: Taxonomy, query: str) -> dict:
-
-        if self.config.sub_config.search.threshold > 1 or self.config.sub_config.search.threshold < 0:
-            raise ValueError('Threshold must be in the range [0,1]')
-        
-        # Stage 1: search for superclasses
-        sup = {}
-        top = taxo.get_GCD([])
-        queue = deque([(n,0) for n in top])
-        if top:
-            self.update_sub_score_cache([query]*len(top), taxo.get_label(top))
-        visited = {}
-
-        while queue:
-            node, fails = queue.popleft()
-            visited[node] = True
-            to_cache = []
-            # Key zero is always assumed to be the global root node.
-            if node == 0:
-                p = 1.0
-            else:
-                nodelabel = taxo.get_label(node)
-                try:
-                    p = self._caches.sub_score_cache[(query, nodelabel)]
-                except KeyError:
-                    p = self.models.sub_model(query, nodelabel).item()
-                    self._caches.sub_score_cache[(query, nodelabel)] = p
-            
-            if p >= self.config.sub_config.search.threshold:
-                sup[node] = p
-                # Recursively track down the domain to keep searching
-                for child in taxo.get_children(node):
-                    if child not in visited:
-                        queue.append((child,0))
-                        to_cache.append(taxo.get_label(child))
-                if to_cache:
-                    self.update_sub_score_cache([query]*len(to_cache), to_cache)
-            elif fails < self.config.sub_config.search.tolerance:
-                for child in taxo.get_children(node):
-                    if child not in visited:
-                        # Keep searching down until success or failures accumulate to tolerance. Used to alleviate misjudgments of the model
-                        queue.append((child,fails+1))
-                        to_cache.append(taxo.get_label(child))
-                if to_cache:
-                    self.update_sub_score_cache([query]*len(to_cache), to_cache)
-            elif self.config.sub_config.search.force_prune:
-                for desc in taxo.get_descendants(node):
-                    visited[desc] = True
-        
-        # At this point, sup consists of all the tested subsumers of query, but there are usually redundancies (non-minimal subsumers). Therefore, we have to remove them
-        sup_ancestors = set.union(*[set(taxo.get_ancestors(s)) for s in sup])
-        sup = {k:sup[k] for k in set(sup).difference(sup_ancestors)}
-        
-        # Remove non-leaf categories if specified
-        if self.config.sub_config.search.always_search_to_bottom:
-            sup = {k:sup[k] for k in set(sup).intersection(taxo.get_LCA([]))}
-        
-        return sup
-
     def similarity(self, query: Union[Hashable, List[Hashable]], key: Union[Hashable, List[Hashable]]) -> Union[float, np.ndarray]:
 
         Q = self.entity_to_unit_vector(query)
@@ -157,6 +98,17 @@ class ICONforCategoryMove(_icon.ICON):
         if len(S.shape) == 0:
             return S.item()
         return S
+
+    def cache_rag_eligibility(self):
+        subset = self._status.working_taxo.filter_by_level(self.config.ret_config.candidate_top_level, 
+                                                           self.config.ret_config.candidate_bottom_level, 
+                                                           return_type=set)
+        if self.config.ret_config.ret_ignore:
+            if isinstance(self.config.ret_config.ret_ignore, re.Pattern):
+                subset = [l for l in subset if not self.config.ret_config.ret_ignore.match(self._status.working_taxo.get_label(l))]
+            else:
+                subset = list(subset.difference(self.config.ret_config.ret_ignore))
+        self._caches.rag_eligible_candidate = subset
 
     def entity_to_unit_vector(self, ent: Union[Hashable, List[Hashable]]) -> np.ndarray:
 
@@ -242,7 +194,7 @@ class ICONforCategoryMove(_icon.ICON):
                 scores[i] = np.mean(self.similarity(query, siblings))
         return scores
 
-    def select(self, query: str, candidate: List[Hashable]) -> Hashable:
+    def select(self, query: str, candidate: List[Hashable], n_winner: int = 1) -> Hashable:
 
         if len(self.config.selection_config.selection_features) == 0:
             raise ValueError('No selection feature is specified.')
@@ -261,8 +213,67 @@ class ICONforCategoryMove(_icon.ICON):
                 scores[:,current_column] = self.evaluate_siblings(query, candidate)
                 current_column += 1
         final_scores = np.dot(scores, self.config.selection_config.weights)
-        winner = candidate[np.argmax(final_scores)]
-        return [winner]
+        winner_indices = np.argsort(final_scores)[::-1][:n_winner]
+        return [candidate[i] for i in winner_indices]
+
+    def search(self, taxo: Taxonomy, query: str) -> dict:
+
+        if self.config.sub_config.search.threshold > 1 or self.config.sub_config.search.threshold < 0:
+            raise ValueError('Threshold must be in the range [0,1]')
+        
+        # Stage 1: search for superclasses
+        sup = {}
+        top = taxo.get_GCD([])
+        queue = deque([(n,0) for n in top])
+        if top:
+            self.update_sub_score_cache([query]*len(top), taxo.get_label(top))
+        visited = {}
+
+        while queue:
+            node, fails = queue.popleft()
+            visited[node] = True
+            to_cache = []
+            # Key zero is always assumed to be the global root node.
+            if node == 0:
+                p = 1.0
+            else:
+                nodelabel = taxo.get_label(node)
+                try:
+                    p = self._caches.sub_score_cache[(query, nodelabel)]
+                except KeyError:
+                    p = self.models.sub_model(query, nodelabel).item()
+                    self._caches.sub_score_cache[(query, nodelabel)] = p
+            
+            if p >= self.config.sub_config.search.threshold:
+                sup[node] = p
+                # Recursively track down the domain to keep searching
+                for child in taxo.get_children(node):
+                    if child not in visited:
+                        queue.append((child,0))
+                        to_cache.append(taxo.get_label(child))
+                if to_cache:
+                    self.update_sub_score_cache([query]*len(to_cache), to_cache)
+            elif fails < self.config.sub_config.search.tolerance:
+                for child in taxo.get_children(node):
+                    if child not in visited:
+                        # Keep searching down until success or failures accumulate to tolerance. Used to alleviate misjudgments of the model
+                        queue.append((child,fails+1))
+                        to_cache.append(taxo.get_label(child))
+                if to_cache:
+                    self.update_sub_score_cache([query]*len(to_cache), to_cache)
+            elif self.config.sub_config.search.force_prune:
+                for desc in taxo.get_descendants(node):
+                    visited[desc] = True
+        
+        # At this point, sup consists of all the tested subsumers of query, but there are usually redundancies (non-minimal subsumers). Therefore, we have to remove them
+        sup_ancestors = set.union(*[set(taxo.get_ancestors(s)) for s in sup])
+        sup = {k:sup[k] for k in set(sup).difference(sup_ancestors)}
+        
+        # Remove non-leaf categories if specified
+        if self.config.sub_config.search.always_search_to_bottom:
+            sup = {k:sup[k] for k in set(sup).intersection(taxo.get_LCA([]))}
+        
+        return sup
 
     def rag(self, query: str, old_parent: Optional[Iterable[str]]) -> dict:
 
@@ -273,14 +284,26 @@ class ICONforCategoryMove(_icon.ICON):
         else:
             raise ValueError('Either old parents must be provided or do_generate must be True')
         
-        q = self.entity_to_unit_vector(guess_parent)
-        subset = self._status.working_taxo.filter_by_level(self.config.ret_config.candidate_top_level, self.config.ret_config.candidate_top_level, set)
-        if self.config.ret_config.ret_ignore:
-            if isinstance(self.config.ret_config.ret_ignore, re.Pattern):
-                subset = [l for l in subset if not self.config.ret_config.ret_ignore.match(self._status.working_taxo.get_label(l))]
-            else:
-                subset = list(subset.difference(self.config.ret_config.ret_ignore))
-        _, indices = self._caches.vector_store[id(self._status.working_taxo)].search(q,k=self.config.ret_config.retrieve_size,subset=subset,exhaustive=True)
+        q = self.entity_to_unit_vector(guess_parent) # q is a 2D array, made of one vector for each old / guessed parent
+
+        # Define the subset of taxonomy nodes eligible for recall
+        if self._caches.rag_eligible_candidate is None:
+            subset = self._status.working_taxo.filter_by_level(self.config.ret_config.candidate_top_level, 
+                                                               self.config.ret_config.candidate_bottom_level, 
+                                                               return_type=set)
+            if self.config.ret_config.ret_ignore:
+                if isinstance(self.config.ret_config.ret_ignore, re.Pattern):
+                    subset = [l for l in subset if not self.config.ret_config.ret_ignore.match(self._status.working_taxo.get_label(l))]
+                else:
+                    subset = list(subset.difference(self.config.ret_config.ret_ignore))
+        else:
+            subset = self._caches.rag_eligible_candidate
+        # Target-specific additional eligibility selection to be implemented in the future
+
+        _, indices = self._caches.vector_store[id(self._status.working_taxo)].search(q,
+                                                                                     k=self.config.ret_config.retrieve_size,
+                                                                                     subset=subset,
+                                                                                     exhaustive=True)
         candidates = set(indices.reshape(-1))
         return list(candidates)
 
@@ -410,6 +433,9 @@ class ICONforCategoryMove(_icon.ICON):
                 self.print_log('Building vector index...', 1, 'system', newline=False)
                 self.build_vector_index(self._status.working_taxo)
                 self.print_log('Complete', 1, 'system')
+
+        if self.config.method == 'rag' and self.config.update_config.do_update == False:
+            self.cache_rag_eligibility() # Pre-computes eligible rag candidates to accelerate running
 
         if self.config.mode == 'auto':
             self.auto()

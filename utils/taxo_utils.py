@@ -534,18 +534,35 @@ class Taxonomy(nx.DiGraph):
             for p in self.get_parents(node):
                 queue.append((p,level+1))
 
-    def filter_by_level(self, top_level: int=0, bottom_level: int=0, return_type: Literal[list, set]=list) -> Union[Type[list], Type[set]]:
+    def filter_by_level(self, top_level: int=0, bottom_level: int=0, cached_levels: bool = False, return_type: Literal[list, set]=list) -> Union[Type[list], Type[set]]:
         '''
-        Return a subset of graph nodes that satisfy the level constraints.
+        Return a subset of graph nodes that satisfy the level constraints. May raise KeyError if cached_levels is True but the levels are not pre-computed.
         '''
-        verify_funcs = [lambda x: True, lambda x: True]
-        if top_level > 0 or bottom_level < 0:
-            self.annotate_levels()
-        if top_level < 0 or bottom_level > 0:
-            self.annotate_reverse_levels()
-        verify_funcs[0] = lambda x: self.nodes[x]['_level'] >= top_level if top_level > 0 else lambda x: self.nodes[x]['_reverse_level'] <= -top_level
-        verify_funcs[1] = lambda x: self.nodes[x]['_reverse_level'] >= bottom_level if bottom_level > 0 else lambda x: self.nodes[x]['_level'] <= -bottom_level
-        return return_type(n for n in self.nodes if all([func(n) for func in verify_funcs]))
+        if not cached_levels:
+            if top_level > 0 or bottom_level < 0:
+                self.annotate_levels()
+            if top_level < 0 or bottom_level > 0:
+                self.annotate_reverse_levels()
+
+        if top_level > 0:
+            top_level_check = lambda n: n['_level'] >= top_level
+        elif top_level < 0:
+            top_level_check = lambda n: n['_reverse_level'] <= -top_level
+        else:
+            top_level_check = lambda n: True
+        
+        if bottom_level > 0:
+            bottom_level_check = lambda n: n['_reverse_level'] >= bottom_level
+        elif bottom_level < 0:
+            bottom_level_check = lambda n: n['_level'] <= -bottom_level
+        else:
+            bottom_level_check = lambda n: True
+        
+        def verify_node(n):
+            n = self.nodes[n]
+            return top_level_check(n) and bottom_level_check(n)
+        
+        return return_type(n for n in self.nodes if verify_node(n))
 
     def create_move_search_space(self, target: Hashable, scope_top_level: int=0, scope_bottom_level: int=0) -> Taxonomy:
         '''
