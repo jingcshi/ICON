@@ -183,3 +183,7 @@ llm/
 
 # Private evaluation results
 experiments/evaluation/results/**
+
+# Confidential
+data/raw/items/
+data/concept_repr/
