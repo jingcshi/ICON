@@ -846,6 +846,15 @@ class TreeTaxonomy(Taxonomy):
             node = parent
             answer.append(node)
         return return_type(answer)
+
+    def get_siblings(self, node: Hashable, return_type: Union[Type[List[Hashable]], Type[Set[Hashable]]]=list) -> Union[List[Hashable], Set[Hashable]]:
+        '''
+        Find the siblings of a node. These are the other children of the node's parent, excluding the queried node itself.
+        '''
+        p = self.get_parent(node)
+        if p is None:
+            return return_type([])
+        return return_type(self.get_children(p, return_type=set).difference({node}))
     
     def subsumes(self, u: Hashable, v: Hashable, labels: Iterable[str]=[]) -> bool:
         '''
