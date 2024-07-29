@@ -700,7 +700,7 @@ class ICON:
         
         outer_loop_progress = np.array([0,0],dtype=int)
     
-        # Retrieve a set of relevant classes from the KNN model, henceforth referred to as base_classes
+        # Retrieve a set of relevant classes from the EMB model, henceforth referred to as base_classes
         vstore = self._caches.vector_store[id(self._status.working_taxo)]
         _, base_classes = vstore.search(vstore.reconstruct(seed), k=self.config.ret_config.retrieve_size, exhaustive=True)
         base_classes = base_classes.tolist()
