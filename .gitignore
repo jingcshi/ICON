@@ -186,4 +186,4 @@ experiments/evaluation/results/**
 
 # Confidential
 data/raw/items/
-data/concept_repr/
+concept_repr
