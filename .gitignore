@@ -188,3 +188,4 @@ experiments/evaluation/results/**
 data/raw/items/
 *repr*
 *cat_desc*
+*ebay*
