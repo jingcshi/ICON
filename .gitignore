@@ -188,3 +188,4 @@ experiments/evaluation/results/**
 *repr*
 *cat_desc*
 *ebay*
+.DS_store
