@@ -183,3 +183,9 @@ llm/
 
 # Private evaluation results
 experiments/evaluation/results/
+
+# Confidential
+data/raw/items/
+*repr*
+*cat_desc*
+*ebay*
