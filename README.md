@@ -79,7 +79,11 @@ Please note that this is only a suggestion for the sub-models and deploying late
 
 The `/experiments/data_wrangling/data_config.json` file contains the variable parameters for each of the dataset generation scripts that we provided:
 
-1. **Universal parameters:**
+<details><summary><strong>All data parameters (click to expand)</strong></summary>
+
+- <details><summary><strong>Universal parameters</strong></summary>
+
+    Settings across all data generation scripts.
 
     - `random_seed`: If set, this seed will be passed to the NumPy pseudorandom generator to ensure reproducibility.
 
@@ -87,13 +91,21 @@ The `/experiments/data_wrangling/data_config.json` file contains the variable pa
 
     - `eval_split_rate`: The ratio (acceptable range $[0,1)$) of evaluation set in the whole dataset.
 
-2. **EMB model:** The data will follow the standard format for contrastive learning that is made of $(q,p,n_1,\ldots,n_k)$ tuples. Each tuple is called a *minibatch*. $q$ is the query concept; $p$ is the positive concept, a concept similar to the query (in our case a *sibling* of the query in the taxonomy); $n_1,\ldots ,n_k$ are the negative concepts which should be concepts that are dissimilar to the query. A sample data is provided [here](./data/emb/google-eval.csv).
+  </details>
+
+- <details><summary><strong>EMB model</strong></summary> 
+
+    The data will follow the standard format for contrastive learning that is made of $(q,p,n_1,\ldots,n_k)$ tuples. Each tuple is called a *minibatch*. $q$ is the query concept; $p$ is the positive concept, a concept similar to the query (in our case a *sibling* of the query in the taxonomy); $n_1,\ldots ,n_k$ are the negative concepts which should be concepts that are dissimilar to the query. A sample data is provided [here](./data/emb/google-eval.csv).
 
     - `concept_appearance_per_file`: How many times each concept in the taxonomy appears in the data.
 
     - `negative_per_minibatch`: $k$ in the aforementioned minibatch format.
     
-3. **GEN model:** The data will be lists of semicolon-delimited concept names accompanied by the concept name of the list's *LCA* (least common ancestor) as reference. Each row is a `([PREFIX][C1];...;[Cn], [LCA])` tuple. Usually the LCA is not trivial (i.e. not the root concept) but an option exists to intentionally *corrupt* some of the lists so that the LCA becomes trivial. A sample data is provided [here](./data/gen/google-eval.csv).
+    </details>
+
+- <details><summary><strong>GEN model</strong></summary> 
+
+    The data will be lists of semicolon-delimited concept names accompanied by the concept name of the list's *LCA* (least common ancestor) as reference. Each row is a `([PREFIX][C1];...;[Cn], [LCA])` tuple. Usually the LCA is not trivial (i.e. not the root concept) but an option exists to intentionally *corrupt* some of the lists so that the LCA becomes trivial. A sample data is provided [here](./data/gen/google-eval.csv).
 
     - `max_chunk_size`: Max length $(\geq 2)$ of the concept list in each row. The generated data will contain lists from length 1 to the specified number.
 
@@ -105,39 +117,57 @@ The `/experiments/data_wrangling/data_config.json` file contains the variable pa
 
     - `prompt_prefix`: The task prefix that will be prepended to all concept lists, used to facilitate the training of some language models. 
 
-3. **SUB model:** The data will be $(\rm{sub},\rm{sup},\rm{ref})$ tuples. $\rm{ref}$ is 1 when $\rm{sub}$ is a sub-concept of $\rm{sup}$, and 0 vice versa. Positive data will be all the child-parent and grandchild-grandparent pairs in the dataset. Negative data (rows where $\rm{ref}=0$) will be generated in two ways: *easy* and *hard*. A sample data is provided [here](./data/sub/google-eval.csv).
+    </details>
+
+- <details><summary><strong>SUB model</strong></summary>  
+
+    The data will be $(\rm{sub},\rm{sup},\rm{ref})$ tuples. $\rm{ref}$ is 1 when $\rm{sub}$ is a sub-concept of $\rm{sup}$, and 0 vice versa. Positive data will be all the child-parent and grandchild-grandparent pairs in the dataset. Negative data (rows where $\rm{ref}=0$) will be generated in two ways: *easy* and *hard*. A sample data is provided [here](./data/sub/google-eval.csv).
 
     - `easy_negative_sample_rate`: The amount of easy negative rows relative to the number of positive rows. These negatives are obtained by replacing $\rm{sup}$ with a random concept.
 
     - `hard_negative_sample_rate`: The amount of hard negative rows relative to the number of positive rows. These negatives are obtained by replacing $\rm{sup}$ with a concept reached via graph random walk from the original $\rm{sup}$.
+
+    </details>
+
+</details>
     
 ### Configurations
         
-Once you are ready, initialise an ICON object with your preferred configurations. If you just want to see ICON at work, use all the default configurations by e.g. `iconobj = ICON(data=your_data, emb_model=your_emb_model, gen_model=your_gen_model, sub_model=your_sub_model)` followed by `iconobj.run()` (this will trigger auto mode, see below). A complete list of configurations is provided as follows:
+Once you are ready, initialise an ICON object with your preferred configurations. If you just want to see ICON at work, use all the default configurations by e.g. `iconobj = ICON(data=your_data, emb_model=your_emb_model, gen_model=your_gen_model, sub_model=your_sub_model)` followed by `iconobj.run()` (this will trigger auto mode, see below).
 
-- `mode`: Select one of the following
+<details><summary><strong>All ICON configurations (click to expand)</strong></summary>
+
+- <details><summary><strong>Global</strong></summary>
+
+    - `mode`: Select one of the following
         
-    - `'auto'`: The system will automatically enrich the entire taxonomy without supervision.
+        - `'auto'`: The system will automatically enrich the entire taxonomy without supervision.
+            
+        - `'semiauto'`: The system will enrich the taxonomy with the seeds specified by user input.
+            
+        - `'manual'`: The system will try to place the new concepts specified by user input directly into the taxonomy. Does not require `gen_model`.
         
-    - `'semiauto'`: The system will enrich the taxonomy with the seeds specified by user input.
+    - `logging`: How much you want to see ICON reporting its progress. Set to 0 or `False` to suppress all logging. Set to 1 if you want to see a progress bar and some brief updates. Set to `True` if you want to hear basically everything! Other possible values for this argument include integers from 2 to 5 (5 is currently equivalent to `True`), and a list of message types.
+            
+    - `rand_seed`: If provided, this will be passed to numpy and torch as the random seed. Use this to ensure reproducibility.
         
-    - `'manual'`: The system will try to place the new concepts specified by user input directly into the taxonomy. Does not require `gen_model`.
+    - `transitive_reduction`: Whether to perform transitive reduction on the outcome taxonomy, which will make sure it's in its simplest form with no redundancy.
+
+    </details>
     
-- `logging`: How much you want to see ICON reporting its progress. Set to 0 or `False` to suppress all logging. Set to 1 if you want to see a progress bar and some brief updates. Set to `True` if you want to hear basically everything! Other possible values for this argument include integers from 2 to 5 (5 is currently equivalent to `True`), and a list of message types.
-        
-- `rand_seed`: If provided, this will be passed to numpy and torch as the random seed. Use this to ensure reproducibility.
-    
-- `transitive_reduction`: Whether to perform transitive reduction on the outcome taxonomy, which will make sure it's in its simplest form with no redundancy.
-    
-- Auto mode config:
+- <details><summary><strong>Auto mode</strong></summary>
     
     - `max_outer_loop`: Maximal number of outer loops allowed.
         
-- Semiauto mode config:
+    </details>  
+
+- <details><summary><strong>Semiauto mode</strong></summary>
     
     - `semiauto_seeds`: An iterable of concepts that will be used as seed for each outer loop.
+
+    </details> 
         
-- Manual mode config:
+- <details><summary><strong>Manual mode</strong></summary>
     
     - `input_concepts`: An iterable of new concept labels to be placed in the taxonomy.
         
@@ -145,29 +175,37 @@ Once you are ready, initialise an ICON object with your preferred configurations
         
     - `auto_bases`: If enabled, ICON will build the search bases for each input concept. Can speed up the search massively at the cost of search breadth. If disabled, `emb_model` will not be required.
         
-- Retrieval config:
+    </details>
+
+- <details><summary><strong>Retrieval</strong></summary>
     
     - `retrieve_size`: The number of concepts to retrieve for each query.
         
     - `restrict_combinations`: Whether you want restrict the subsets under consideration to those including the seed concept.
-        
-- Generation config:
+
+    </details>
+
+- <details><summary><strong>Generation</strong></summary>
     
     - `ignore_label`: The set of output labels that indicate the `gen_model`'s rejection to generate an union label
         
     - `filter_subsets`: Whether you want the `gen_model` to skip the subsets that have trivial LCAs. That is, the LCAs of the set form a subset of itself.
+
+    </details>
         
-- Concept placement config:
+- <details><summary><strong>Concept placement</strong></summary>
     
-    - Search domain constraints:
+    - <details><summary><strong>Search domain constraints</strong></summary>
         
         - `subgraph_crop`: Whether to limit the search domain to the descendants of the LCAs of the concepts which are used to generate the new concept (referred to as search bases in this documentation).
 
         - `subgraph_force`: If provided (type: list of list of labels), the search domain will always include the LCAs of search bases w.r.t. the sub-taxonomy defined by the edges whose labels are in each list of the input. Will not take effect if `subgraph_crop = False`.
             
         - `subgraph_strict`: Whether to further limit the search domain to the subsumers of at least one base concept.
+
+        </details>
             
-    - Search:
+    - <details><summary><strong>Search</strong></summary>
         
         - `threshold`: The `sub_model`'s minimal predicted probability for accepting subsumption.
             
@@ -176,14 +214,22 @@ Once you are ready, initialise an ICON object with your preferred configurations
         - `force_known_subsumptions`: Whether to force the search to place the new concept at least as general as the LCA of the search bases, and at least as specific as the union of the search bases. Enabling this will also force the search to stop at the search bases.
             
         - `force_prune_branches`: Whether to force the search to reject all subclasses of a tested non-superclass in superclass search, and to reject all superclasses of a tested non-subclass in subclass search. Enabling this will slow down the search if the taxonomy is roughly tree-like.
+
+        </details>
         
-- Taxonomy update config:
+    </details>
+
+- <details><summary><strong>Taxonomy update</strong></summary>
     
     - `do_update`: Whether you would like to actually update the taxonomy. If set to `True`, running ICON will return the enriched taxonomy. Otherwise, running ICON will return the records of its predictions in a dictionary.
     
     - `eqv_score_func`: When ICON is updating taxonomies, it's sometimes necessary to estimate the likelihood of $a=b$ where $a$ and $b$ are two concepts, given the likelihoods of $a \sqsubseteq b$ (b subsumes a) and $b \sqsubseteq a$. This argument is therefore a function that crunches two probabilities together to estimate the intersection probability. It's usually fine to leave it as default, which is the multiplication operation.
     
     - `do_lexical_check`: Whether you would like to run a simple lexical screening for each new concept to see if it coincides with any existing concept. If set to `True`, ICON will have to pre-compute and cache the lexical features for each concept in the taxonomy when initialising.
+
+    </details>
+
+</details>
 
 ### Running ICON
 

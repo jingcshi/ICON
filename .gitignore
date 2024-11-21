@@ -185,7 +185,6 @@ llm/
 experiments/evaluation/results/**
 
 # Confidential
-data/raw/items/
 *repr*
 *cat_desc*
 *ebay*
