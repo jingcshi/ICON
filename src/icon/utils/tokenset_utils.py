@@ -1,10 +1,13 @@
 import re
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import wordnet as wn
 from collections import OrderedDict
-from typing import List
+from typing import List, Union
+
+import nltk
+from nltk.corpus import wordnet as wn
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+
+_wnl = WordNetLemmatizer()
 
 regexStripID = re.compile(r" \(\d+\)")
 regexGetID = re.compile(r"\s? \((\d+)\)\s?\> ")
@@ -49,19 +52,18 @@ def listunion(x,y):
 def listdiff(x,y):
     return [z for z in x if z not in y]
 
-def listadd(l,x):
-    return l + [x] if x not in l else l
+def listadd(lst, x):
+    return lst + [x] if x not in lst else lst
 
-def tokenise(s:str or List[str]):
+def tokenise(s: Union[str, List[str]]):
     if s == []:
         return []
-    if type(s) == str:
+    if isinstance(s, str):
         return word_tokenize(s)
     return word_tokenize(s[0]) + tokenise(s[1:])
 
-def lemma(word,pos,use_pos=True):
-    wnl = WordNetLemmatizer()
-    return wnl.lemmatize(word,pos) if use_pos else wnl.lemmatize(word)
+def lemma(word, pos, use_pos=True):
+    return _wnl.lemmatize(word, pos) if use_pos else _wnl.lemmatize(word)
 
 def tokenset(text,lemmatize=True,use_pos=False):
     pos_replace = {'NOUN':'n','VERB':'v','ADJ':'a','ADV':'r','NUM':'n'}
@@ -89,14 +91,14 @@ def hypernym_reduce(tokens,use_pos=False):
     return reduced
 
 def hypernym(word1,word2,word1_pos=None,word2_pos=None,use_pos=False):
-    if word2 == None:
+    if word2 is None:
         return True
-    if word1 == None:
+    if word1 is None:
         return False
     if word1 == word2 and (not use_pos or word1_pos == word2_pos):
         return True
-    synsets1 = wn.synsets(word1,pos=word1_pos) if ((word1_pos != None) and use_pos) else wn.synsets(word1)
-    synsets2 = wn.synsets(word2,pos=word2_pos) if ((word1_pos != None) and use_pos) else wn.synsets(word2)
+    synsets1 = wn.synsets(word1,pos=word1_pos) if (word1_pos is not None and use_pos) else wn.synsets(word1)
+    synsets2 = wn.synsets(word2,pos=word2_pos) if (word1_pos is not None and use_pos) else wn.synsets(word2)
     for s1 in synsets1:
         for s2 in synsets2:
             if hypernym_search(s2,s1):
@@ -127,9 +129,9 @@ def keyword_string(text,lemmatize=True,use_pos=False,shuffle=False):
     return string
 
 def hyper(word1,word2):
-    if word1 == None:
+    if word1 is None:
         return word2
-    if word2 == None:
+    if word2 is None:
         return word1
     if hypernym(word1[0],word2[0]):
         return word1
@@ -139,7 +141,7 @@ def hyper(word1,word2):
         return None
 
 def hypo(word1,word2):
-    if word1 == None or word2 == None:
+    if word1 is None or word2 is None:
         return None
     if hypernym(word1[0],word2[0]):
         return word2
@@ -151,7 +153,7 @@ def hypo(word1,word2):
 def common_parent(text1,text2):
     set1 = tokenset(text1)
     set2 = tokenset(text2)
-    intersection = set()
+    intersection = []
     for token1 in set1:
         addition = None
         for token2 in set2:
@@ -159,10 +161,10 @@ def common_parent(text1,text2):
                 addition = hyper(addition,token1)
             if hypernym(token2[0],token1[0]):
                 addition = hyper(addition,token2)
-        if addition != None:
+        if addition is not None:
             intersection = listadd(intersection, addition)
     return intersection
-                
+
 
 def to_string(tset):
     if tset == set():

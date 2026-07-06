@@ -189,3 +189,13 @@ experiments/evaluation/results/**
 *cat_desc*
 *ebay*
 .DS_store
+
+# Session handoff / memory
+.remember/
+
+# conda / local envs
+conda_envs/
+
+# AI development traces
+CLAUDE.md
+TODO.md
