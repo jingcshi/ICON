@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "icon-lib"
+version = "0.1.0"
+description = "ICON: Implicit CONcept Insertion — self-supervised taxonomy enrichment"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "networkx",
+    "owlready2",
+    "faiss-gpu",
+    "nltk",
+    "tqdm",
+    "click",
+]
+
+[project.optional-dependencies]
+training = [
+    "torch",
+    "transformers",
+    "datasets",
+    "evaluate",
+    "info-nce-pytorch",
+    "pandas",
+    "scikit-learn",
+]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+]
+
+[project.scripts]
+icon = "icon.cli.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+warn_return_any = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

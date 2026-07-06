@@ -1,45 +1,23 @@
-import os
-import sys
-sys.path.append(os.getcwd() + '/..')
-from typing import List, Set, Union, Tuple, Callable, Optional, Hashable, Iterable, Any, Literal
-from itertools import combinations
-from collections import deque
 import re
-import torch
+from collections import deque
+from copy import deepcopy
+from typing import Any, Hashable, Iterable, List, Literal, Optional, Union
+
+import networkx as nx
 import numpy as np
 import owlready2 as o2
-import networkx as nx
-from copy import deepcopy
-from tqdm.notebook import tqdm
-from utils.log_style import Fore, Style
-from utils.taxo_utils import Taxonomy
-from utils.tokenset_utils import tokenset
-import main.config as _config
-import main.icon as _icon
+import torch
+from tqdm.auto import tqdm
 
-class NullContext:
-    '''
-    Dummy replacement for a progress bar environment.
-    '''
-    
-    def __init__(self):
-        pass
-    def __enter__(self):
-        pass
-    def __exit__(self, type, value, traceback):
-        pass
-    def __bool__(self):
-        return False
-    def reset(self, *args, **kwargs):
-        pass
-    def update(self, *args, **kwargs):
-        pass
-    def set_description(self, *args, **kwargs):
-        pass
+import icon.config.config as _config
+import icon.core.icon as _icon
+from icon.core.taxonomy import Taxonomy, TreeTaxonomy
+from icon.utils.log_style import Fore, Style
+
 
 class ICONforCategoryMove(_icon.ICON):
-    
-    def __init__(self, 
+
+    def __init__(self,
                 data: Union[Taxonomy,o2.Ontology]=None,
                 emb_model=None,
                 gen_model=None,
@@ -61,11 +39,11 @@ class ICONforCategoryMove(_icon.ICON):
                 threshold: float=0.5,
                 tolerance: int=0,
                 force_prune: bool=False,
-                always_search_to_bottom : bool=True,
+                always_search_to_bottom: bool=True,
                 do_select: bool=True,
-                always_include_old: bool = True,
+                always_include_old: bool=True,
                 selection_features: List[Literal['parent', 'siblings']]=['parent', 'siblings'],
-                weights: np.ndarray=np.array([1,1], dtype = float),
+                weights: np.ndarray=np.array([1,1], dtype=float),
                 do_update: bool=True,
                 logging: Union[bool, int, List[str]]=1
                 ) -> None:
@@ -89,7 +67,7 @@ class ICONforCategoryMove(_icon.ICON):
                                 selection_config=_config.iconforcategorymove_selection_config(do_select=do_select, always_include_old=always_include_old, selection_features=selection_features, weights=weights),
                                 update_config=_config.icon_update_config(do_update=do_update),
                                 logging=logging)
-    
+
     def similarity(self, query: Union[Hashable, List[Hashable]], key: Union[Hashable, List[Hashable]]) -> Union[float, np.ndarray]:
 
         Q = self.entity_to_unit_vector(query)
@@ -100,12 +78,12 @@ class ICONforCategoryMove(_icon.ICON):
         return S
 
     def cache_rag_eligibility(self):
-        subset = self._status.working_taxo.filter_by_level(self.config.ret_config.candidate_top_level, 
-                                                           self.config.ret_config.candidate_bottom_level, 
+        subset = self._status.working_taxo.filter_by_level(self.config.ret_config.candidate_top_level,
+                                                           self.config.ret_config.candidate_bottom_level,
                                                            return_type=set)
         if self.config.ret_config.ret_ignore:
             if isinstance(self.config.ret_config.ret_ignore, re.Pattern):
-                subset = [l for l in subset if not self.config.ret_config.ret_ignore.match(self._status.working_taxo.get_label(l))]
+                subset = [node for node in subset if not self.config.ret_config.ret_ignore.match(self._status.working_taxo.get_label(node))]
             else:
                 subset = list(subset.difference(self.config.ret_config.ret_ignore))
         self._caches.rag_eligible_candidate = subset
@@ -114,16 +92,16 @@ class ICONforCategoryMove(_icon.ICON):
 
         vecs = []
         vstore = self._caches.vector_store[id(self._status.working_taxo)]
-        if isinstance(ent, Hashable):
+        if not isinstance(ent, list):
             ent = [ent]
         for e in ent:
-            if e in vstore.concepts: # Query is a concept has its embedding has been computed and stored
+            if e in vstore.concepts:
                 vecs.append(vstore.reconstruct(e))
-            elif e in self._status.working_taxo.nodes: # Query is concept but its embedding has not yet been computed
+            elif e in self._status.working_taxo.nodes:
                 v = self.models.emb_model(self._status.working_taxo.get_label(e))
                 vstore.add(v, e)
                 vecs.append(v)
-            elif isinstance(e, str): # Query is a string
+            elif isinstance(e, str):
                 v = self.models.emb_model(e)
                 vecs.append(v)
             else:
@@ -132,7 +110,7 @@ class ICONforCategoryMove(_icon.ICON):
         V = V / np.linalg.norm(V, axis=1, keepdims=True)
         return V
 
-    def move(self, target: Hashable, new_parent: Union[List[Hashable], Hashable], old_parent: Optional[Union[List[Hashable], Hashable]] = None) -> None:
+    def move(self, target: Hashable, new_parent: Union[List[Hashable], Hashable], old_parent: Optional[Union[List[Hashable], Hashable]]=None) -> None:
 
         single_new = isinstance(new_parent, Hashable)
         single_old = isinstance(old_parent, Hashable)
@@ -163,10 +141,8 @@ class ICONforCategoryMove(_icon.ICON):
         return
 
     def evaluate_parent(self, query: str, candidate: List[Hashable]) -> np.ndarray:
-        '''
-        Evaluate the candidate parent by predicting subsumption likelihood between the query and the candidate parent.
-        '''
-        scores = np.zeros(len(candidate), dtype = float)
+
+        scores = np.zeros(len(candidate), dtype=float)
         index_to_cache = []
         for i, c in enumerate(candidate):
             if c == 0:
@@ -180,12 +156,10 @@ class ICONforCategoryMove(_icon.ICON):
             for i in index_to_cache:
                 scores[i] = self._caches.sub_score_cache[(query, self._status.working_taxo.get_label(candidate[i]))]
         return scores
-    
+
     def evaluate_siblings(self, query: str, candidate: List[Hashable]) -> np.ndarray:
-        '''
-        Evaluate the candidate parent by measuring the average embedding similarity between the query and its candidate siblings (children of the candidate parent).
-        '''
-        scores = np.zeros(len(candidate), dtype = float)
+
+        scores = np.zeros(len(candidate), dtype=float)
         for i, c in enumerate(candidate):
             siblings = self._status.working_taxo.get_children(c)
             if len(siblings) == 0:
@@ -194,14 +168,14 @@ class ICONforCategoryMove(_icon.ICON):
                 scores[i] = np.mean(self.similarity(query, siblings))
         return scores
 
-    def select(self, query: str, candidate: List[Hashable], n_winner: int = 1) -> Hashable:
+    def select(self, query: str, candidate: List[Hashable], n_winner: int=1) -> Hashable:
 
         if len(self.config.selection_config.selection_features) == 0:
             raise ValueError('No selection feature is specified.')
         if len(self.config.selection_config.selection_features) != self.config.selection_config.weights.shape[0]:
             raise ValueError('The size of weights must match the number of used features.')
 
-        scores = np.zeros((len(candidate), len(self.config.selection_config.selection_features)), dtype = float)
+        scores = np.zeros((len(candidate), len(self.config.selection_config.selection_features)), dtype=float)
         current_column = 0
         for f in self.config.selection_config.selection_features:
             if f not in ['parent', 'siblings']:
@@ -220,8 +194,7 @@ class ICONforCategoryMove(_icon.ICON):
 
         if self.config.sub_config.search.threshold > 1 or self.config.sub_config.search.threshold < 0:
             raise ValueError('Threshold must be in the range [0,1]')
-        
-        # Stage 1: search for superclasses
+
         sup = {}
         top = taxo.get_GCD([])
         queue = deque([(n,0) for n in top])
@@ -233,7 +206,6 @@ class ICONforCategoryMove(_icon.ICON):
             node, fails = queue.popleft()
             visited[node] = True
             to_cache = []
-            # Key zero is always assumed to be the global root node.
             if node == 0:
                 p = 1.0
             else:
@@ -243,10 +215,9 @@ class ICONforCategoryMove(_icon.ICON):
                 except KeyError:
                     p = self.models.sub_model(query, nodelabel).item()
                     self._caches.sub_score_cache[(query, nodelabel)] = p
-            
+
             if p >= self.config.sub_config.search.threshold:
                 sup[node] = p
-                # Recursively track down the domain to keep searching
                 for child in taxo.get_children(node):
                     if child not in visited:
                         queue.append((child,0))
@@ -256,7 +227,6 @@ class ICONforCategoryMove(_icon.ICON):
             elif fails < self.config.sub_config.search.tolerance:
                 for child in taxo.get_children(node):
                     if child not in visited:
-                        # Keep searching down until success or failures accumulate to tolerance. Used to alleviate misjudgments of the model
                         queue.append((child,fails+1))
                         to_cache.append(taxo.get_label(child))
                 if to_cache:
@@ -264,41 +234,37 @@ class ICONforCategoryMove(_icon.ICON):
             elif self.config.sub_config.search.force_prune:
                 for desc in taxo.get_descendants(node):
                     visited[desc] = True
-        
-        # At this point, sup consists of all the tested subsumers of query, but there are usually redundancies (non-minimal subsumers). Therefore, we have to remove them
+
         sup_ancestors = set.union(*[set(taxo.get_ancestors(s)) for s in sup])
         sup = {k:sup[k] for k in set(sup).difference(sup_ancestors)}
-        
-        # Remove non-leaf categories if specified
+
         if self.config.sub_config.search.always_search_to_bottom:
             sup = {k:sup[k] for k in set(sup).intersection(taxo.get_LCA([]))}
-        
+
         return sup
 
     def rag(self, query: str, old_parent: Optional[Iterable[str]]) -> dict:
 
         if self.config.gen_config.do_generate:
-            guess_parent = self.models.gen_model(query) # Expected to return List[str], a list of candidate parent names
+            guess_parent = self.models.gen_model(query)
         elif old_parent:
             guess_parent = old_parent
         else:
             raise ValueError('Either old parents must be provided or do_generate must be True')
-        
-        q = self.entity_to_unit_vector(guess_parent) # q is a 2D array, made of one vector for each old / guessed parent
 
-        # Define the subset of taxonomy nodes eligible for recall
+        q = self.entity_to_unit_vector(guess_parent)
+
         if self._caches.rag_eligible_candidate is None:
-            subset = self._status.working_taxo.filter_by_level(self.config.ret_config.candidate_top_level, 
-                                                               self.config.ret_config.candidate_bottom_level, 
+            subset = self._status.working_taxo.filter_by_level(self.config.ret_config.candidate_top_level,
+                                                               self.config.ret_config.candidate_bottom_level,
                                                                return_type=set)
             if self.config.ret_config.ret_ignore:
                 if isinstance(self.config.ret_config.ret_ignore, re.Pattern):
-                    subset = [l for l in subset if not self.config.ret_config.ret_ignore.match(self._status.working_taxo.get_label(l))]
+                    subset = [node for node in subset if not self.config.ret_config.ret_ignore.match(self._status.working_taxo.get_label(node))]
                 else:
                     subset = list(subset.difference(self.config.ret_config.ret_ignore))
         else:
             subset = self._caches.rag_eligible_candidate
-        # Target-specific additional eligibility selection to be implemented in the future
 
         _, indices = self._caches.vector_store[id(self._status.working_taxo)].search(q,
                                                                                      k=self.config.ret_config.retrieve_size,
@@ -308,76 +274,71 @@ class ICONforCategoryMove(_icon.ICON):
         return list(candidates)
 
     def examine_category(self, target: Hashable) -> None:
-            
-            if target not in self._status.working_taxo.nodes():
-                self.print_log(f'Target {Fore.RED}{Style.BRIGHT}not found{Style.RESET_ALL} in the taxonomy. Skipping.', 2, 'outer_loop')
-                return
-            if target == 0:
-                self.print_log(f'Target is the {Fore.RED}{Style.BRIGHT}root{Style.RESET_ALL} node. Skipping.', 2, 'outer_loop')
-                self._status.progress[0] += 1
-                return
 
-            # Remove the upwards edges of target from the taxonomy
-            old_parent = self._status.working_taxo.get_parents(target)
+        if target not in self._status.working_taxo.nodes():
+            self.print_log(f'Target {Fore.RED}{Style.BRIGHT}not found{Style.RESET_ALL} in the taxonomy. Skipping.', 2, 'outer_loop')
+            return
+        if target == 0:
+            self.print_log(f'Target is the {Fore.RED}{Style.BRIGHT}root{Style.RESET_ALL} node. Skipping.', 2, 'outer_loop')
+            self._status.progress[0] += 1
+            return
+
+        old_parent = self._status.working_taxo.get_parents(target)
+        for p in old_parent:
+            self._status.working_taxo.remove_edge(target, p)
+        old_parent_repr = old_parent[0] if len(old_parent) == 1 else old_parent
+
+        if self.config.method == 'search':
+            subtaxo = self._status.working_taxo.create_move_search_space(target, self.config.sub_config.subgraph.scope_top_level, self.config.sub_config.subgraph.scope_bottom_level)
+            candidates = list(self.search(subtaxo, self._status.working_taxo.get_label(target)))
+        elif self.config.method == 'rag':
+            candidates = list(self.rag(self._status.working_taxo.get_label(target), old_parent))
+        if self.config.selection_config.always_include_old:
+            candidates = list(set(candidates).union(set(old_parent)))
+        self.print_log(f'Found {Fore.BLACK}{Style.BRIGHT}{len(candidates)}{Style.RESET_ALL} candidate{"" if len(candidates) == 1 else "s"} with {self.config.method}', 3, 'outer_loop_details')
+        for c in candidates:
+            self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(c)}{Style.RESET_ALL} ({c})', 4, 'outer_loop_concept_list')
+
+        if not candidates:
+            prefix = 'Prediction: ' if not self.config.update_config.do_update else ''
+            self.print_log(f'{prefix}{Style.BRIGHT}{Fore.CYAN}{self._status.working_taxo.get_label(target)} {Fore.WHITE}remains{Style.RESET_ALL} under {Style.BRIGHT}{Fore.BLUE}{self._status.working_taxo.get_label(old_parent_repr)}{Style.RESET_ALL} ({old_parent_repr}).', 3, 'outer_loop_details')
             for p in old_parent:
-                self._status.working_taxo.remove_edge(target, p)
-            old_parent_repr = old_parent[0] if len(old_parent) == 1 else old_parent
+                self._status.working_taxo.add_edge(target, p, label='moved')
+            return
 
-            # Search for new candidate parents
-            if self.config.method == 'search':
-                subtaxo = self._status.working_taxo.create_move_search_space(target, self.config.sub_config.subgraph.scope_top_level, self.config.sub_config.subgraph.scope_bottom_level)
-                candidates = list(self.search(subtaxo, self._status.working_taxo.get_label(target)))
-            elif self.config.method == 'rag':
-                candidates = list(self.rag(self._status.working_taxo.get_label(target), old_parent))
-            if self.config.selection_config.always_include_old:
-                candidates = list(set(candidates).union(set(old_parent)))
-            self.print_log(f'Found {Fore.BLACK}{Style.BRIGHT}{len(candidates)}{Style.RESET_ALL} candidate{"" if len(candidates) == 1 else "s"} with {self.config.method}', 3, 'outer_loop_details')
-            for c in candidates:
-                self.print_log(f'{Fore.BLUE}{Style.BRIGHT}{self._status.working_taxo.get_label(c)}{Style.RESET_ALL} ({c})', 4, 'outer_loop_concept_list')
+        if (self.config.selection_config.do_select or isinstance(self._status.working_taxo, TreeTaxonomy)) and len(candidates) > 1:
+            winner = self.select(self._status.working_taxo.get_label(target), candidates)
+        else:
+            winner = candidates
 
-            # If no candidate is found, keep the target under its original parents
-            if not candidates:
-                prefix = 'Prediction: ' if not self.config.update_config.do_update else ''
-                self.print_log(f'{prefix}{Style.BRIGHT}{Fore.CYAN}{self._status.working_taxo.get_label(target)} {Fore.WHITE}remains{Style.RESET_ALL} under {Style.BRIGHT}{Fore.BLUE}{self._status.working_taxo.get_label(old_parent_repr)}{Style.RESET_ALL} ({old_parent_repr}).', 3, 'outer_loop_details')
-                for p in old_parent:
-                    self._status.working_taxo.add_edge(target, p, label='moved')
-                return
-            
-            # Select the best candidate if required
-            if (self.config.selection_config.do_select or isinstance(self._status.working_taxo, taxo_utils.TreeTaxonomy)) and len(candidates) > 1:
-                winner = self.select(self._status.working_taxo.get_label(target), candidates)
+        if self.config.update_config.do_update:
+            self.move(target, winner, old_parent)
+        else:
+            if set(winner) == set(old_parent):
+                self.print_log(f"Prediction: {Style.BRIGHT}{Fore.CYAN}{self._status.working_taxo.get_label(target)} {Fore.WHITE}remains{Style.RESET_ALL} under {Style.BRIGHT}{Fore.BLUE}{self._status.working_taxo.get_label(old_parent_repr)}{Style.RESET_ALL} ({old_parent_repr})", 3, "outer_loop_details")
             else:
-                winner = candidates
-
-            # Update the taxonomy or log the results
-            if self.config.update_config.do_update:
-                self.move(target, winner, old_parent)
-            else:
-                if set(winner) == set(old_parent):
-                    self.print_log(f"Prediction: {Style.BRIGHT}{Fore.CYAN}{self._status.working_taxo.get_label(target)} {Fore.WHITE}remains{Style.RESET_ALL} under {Style.BRIGHT}{Fore.BLUE}{self._status.working_taxo.get_label(old_parent_repr)}{Style.RESET_ALL} ({old_parent_repr})", 3, "outer_loop_details")
-                else:
-                    winner_repr = winner[0] if len(winner) == 1 else winner
-                    self.print_log(f"Prediction: {Style.BRIGHT}{Fore.CYAN}{self._status.working_taxo.get_label(target)} {Fore.GREEN}moved{Style.RESET_ALL} to under {Style.BRIGHT}{Fore.BLUE}{self._status.working_taxo.get_label(winner_repr)}{Style.RESET_ALL} ({winner_repr})", 3, "outer_loop_details")
-            self._status.logs[target] = winner
+                winner_repr = winner[0] if len(winner) == 1 else winner
+                self.print_log(f"Prediction: {Style.BRIGHT}{Fore.CYAN}{self._status.working_taxo.get_label(target)} {Fore.GREEN}moved{Style.RESET_ALL} to under {Style.BRIGHT}{Fore.BLUE}{self._status.working_taxo.get_label(winner_repr)}{Style.RESET_ALL} ({winner_repr})", 3, "outer_loop_details")
+        self._status.logs[target] = winner
 
     def auto(self) -> None:
 
         leaves = self._status.working_taxo.get_LCA([])
         if self.config.auto_config.ignore:
             if isinstance(self.config.auto_config.ignore, re.Pattern):
-                movable = [l for l in leaves if not self.config.auto_config.ignore.match(self._status.working_taxo.get_label(l))]
+                movable = [node for node in leaves if not self.config.auto_config.ignore.match(self._status.working_taxo.get_label(node))]
             else:
                 movable = list(set(leaves).difference(self.config.auto_config.ignore))
         else:
             movable = leaves
         total = min(len(movable), self.config.auto_config.max_outer_loop) if self.config.auto_config.max_outer_loop else len(movable)
-        self._status.pbar_outer.reset(total = total)
+        self._status.pbar_outer.reset(total=total)
         self._status.pbar_outer.set_description('Auto mode')
         with self._status.pbar_outer:
             for c in movable:
                 if self.config.auto_config.max_outer_loop:
                     if self._status.outer_loop_count >= self.config.auto_config.max_outer_loop:
-                        self.print_log(f'Iteration limit reached. Exiting.', 1, 'system')
+                        self.print_log('Iteration limit reached. Exiting.', 1, 'system')
                         break
                 self._status.outer_loop_count += 1
                 self.print_log(f'Iteration {self._status.outer_loop_count}: Examining category {Fore.CYAN}{Style.BRIGHT}{self._status.working_taxo.get_label(c)}{Style.RESET_ALL} ({c}):', 2, 'outer_loop')
@@ -386,7 +347,7 @@ class ICONforCategoryMove(_icon.ICON):
 
     def manual(self) -> None:
 
-        self._status.pbar_outer.reset(total = len(self.config.manual_config.input_concepts))
+        self._status.pbar_outer.reset(total=len(self.config.manual_config.input_concepts))
         self._status.pbar_outer.set_description('Manual mode')
         with self._status.pbar_outer:
             for c in self.config.manual_config.input_concepts:
@@ -396,37 +357,37 @@ class ICONforCategoryMove(_icon.ICON):
                 self._status.pbar_outer.update()
 
     def run(self, **kwargs) -> Union[Taxonomy, dict]:
-        
+
         self._status = _config.icon_status()
         self.update_config(**kwargs)
-        if self.config.rand_seed != None:
+        if self.config.rand_seed is not None:
             np.random.seed(self.config.rand_seed)
             torch.manual_seed(self.config.rand_seed)
         if not self.data:
             raise ValueError('Missing input data')
         self._status.working_taxo = deepcopy(self.data)
         self.print_log(f'Loaded {self.data.__str__()}. Commencing category move', 1, 'system')
-        
+
         self._status.outer_loop_count = 0
         self._status.progress = np.array([0,0], dtype=int)
         progress_bar = (isinstance(self.config.logging,bool) and self.config.logging) or (isinstance(self.config.logging,int) and self.config.logging >= 1) or (isinstance(self.config.logging,list) and 'progress_bar' in self.config.logging)
         if progress_bar:
-            self._status.pbar_outer = tqdm(total = 1)
+            self._status.pbar_outer = tqdm(total=1)
         else:
-            self._status.pbar_outer = NullContext()
-        
+            self._status.pbar_outer = _icon.NullContext()
+
         if self.config.method == 'search':
             if self.models.sub_model is None:
-                raise ModuleNotFoundError(f'sub_model is required to run on search method')               
+                raise ModuleNotFoundError('sub_model is required to run on search method')
         elif self.config.method == 'rag':
             if self.models.emb_model is None:
-                raise ModuleNotFoundError(f'emb_model is required to run on rag method')
+                raise ModuleNotFoundError('emb_model is required to run on rag method')
             if self.models.sub_model is None:
-                raise ModuleNotFoundError(f'sub_model is required to run on rag method')
+                raise ModuleNotFoundError('sub_model is required to run on rag method')
         else:
             raise ValueError(f'Invalid method: {self.config.method}. Please choose from "search" or "rag"')
-        
-        if self.config.method == 'rag' or 'siblings' in self.config.selection_config.selection_features: # Need to build a vector index
+
+        if self.config.method == 'rag' or 'siblings' in self.config.selection_config.selection_features:
             if self.check_vector_index_available(self._status.working_taxo):
                 self.print_log('Found pre-computed vector index', 1, 'system')
             else:
@@ -434,8 +395,8 @@ class ICONforCategoryMove(_icon.ICON):
                 self.build_vector_index(self._status.working_taxo)
                 self.print_log('Complete', 1, 'system')
 
-        if self.config.method == 'rag' and self.config.update_config.do_update == False:
-            self.cache_rag_eligibility() # Pre-computes eligible rag candidates to accelerate running
+        if self.config.method == 'rag' and not self.config.update_config.do_update:
+            self.cache_rag_eligibility()
 
         if self.config.mode == 'auto':
             self.auto()
@@ -452,12 +413,12 @@ class ICONforCategoryMove(_icon.ICON):
         plural_move = 's' if self._status.progress[1] > 1 else ''
         progress_str = f' Examined {Fore.BLACK}{Style.BRIGHT}{self._status.progress[0]+self._status.progress[1]}{Style.RESET_ALL} concept{plural_all}. Moved {Fore.BLACK}{Style.BRIGHT}{self._status.progress[1]}{Style.RESET_ALL} concept{plural_move} and kept {Fore.BLACK}{Style.BRIGHT}{self._status.progress[0]}{Style.RESET_ALL} concept{plural_keep}'
         self.print_log(f'Enrichment complete.{progress_str}.', 1, 'system')
-        
+
         if self.config.update_config.do_update:
             self.print_log(f'Return {self._status.working_taxo.__str__()}', 1, 'system')
             output = self._status.working_taxo
         else:
             self.print_log('Return ICON predictions', 1, 'system')
             output = self._status.logs
-        
+
         return output

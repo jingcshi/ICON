@@ -1,12 +1,11 @@
-import os
-import sys
-sys.path.append(os.getcwd() + '/..')
-from typing import List, Tuple, Union, Hashable, Literal
-import numpy as np
+from typing import Hashable, List, Literal, Tuple, Union
+
 import faiss
+import numpy as np
+
 
 class FaissVectorStore:
-    def __init__(self, 
+    def __init__(self,
                 vectors: np.ndarray,
                 concepts: List[Hashable],
                 use_ivf: bool = True,
@@ -19,7 +18,7 @@ class FaissVectorStore:
         if normalize:
             vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
         N = vectors.shape[0]
-        D = vectors.shape[1] 
+        D = vectors.shape[1]
         if use_ivf:
             self.is_ivf = True
             if nlist is None:
@@ -34,7 +33,7 @@ class FaissVectorStore:
         else:
             self.is_ivf = False
             index = faiss.index_factory(D, "IDMap2,Flat", metric)
-        index.add_with_ids(vectors, concepts)
+        index.add_with_ids(vectors, np.array(concepts, dtype=np.int64))
         self.index = index
         self.concepts = set(concepts)
         self.ntotal = N
@@ -43,18 +42,19 @@ class FaissVectorStore:
     def add(self, vectors: np.ndarray, ids: Union[Hashable, List[Hashable]]) -> None:
         if isinstance(ids, Hashable):
             ids = [ids]
-            vectors = vectors[np.newaxis]
-        self.index.add_with_ids(vectors, ids)
+            if len(vectors.shape) == 1:
+                vectors = vectors[np.newaxis]
+        self.index.add_with_ids(vectors.astype(np.float32), np.array(ids, dtype=np.int64))
         self.ntotal += len(ids)
         self.concepts = self.concepts.union(ids)
-    
+
     def delete(self, ids: Union[Hashable, List[Hashable]]) -> None:
         if isinstance(ids, Hashable):
             ids = [ids]
         self.ntotal -= self.index.remove_ids(np.array(ids))
         self.concepts = self.concepts.difference(ids)
-    
-    def search(self, 
+
+    def search(self,
                query: np.ndarray,
                k: int = 5,
                subset: List[Hashable] = None,
@@ -69,23 +69,23 @@ class FaissVectorStore:
         if exhaustive and self.is_ivf:
             nprobe = self.index.nlist
         search_params = {}
-        if subset != None:
-            search_params['sel'] = faiss.IDSelectorArray(subset)
-        if nprobe != None and self.is_ivf:
+        if subset is not None:
+            search_params['sel'] = faiss.IDSelectorArray(np.array(subset, dtype=np.int64))
+        if nprobe is not None and self.is_ivf:
             search_params['nprobe'] = nprobe
         param_func = faiss.SearchParametersIVF if self.is_ivf else faiss.SearchParameters
-        D, I = self.index.search(query, k, params=param_func(**search_params))
+        distances, indices = self.index.search(query, k, params=param_func(**search_params))
         if single_query:
-            D = D[0]
-            I = I[0]
-        return D, I
-    
+            distances = distances[0]
+            indices = indices[0]
+        return distances, indices
+
     def reconstruct(self, ids: Union[Hashable, List[Hashable]]) -> np.ndarray:
 
         if isinstance(ids, Hashable):
-            return self.index.reconstruct(ids)
+            return self.index.reconstruct(ids)[np.newaxis]
         return self.index.reconstruct_batch(ids)
-    
+
     def retrain(self, vectors: np.ndarray) -> None:
         if self.is_ivf:
             self.index.train(vectors)

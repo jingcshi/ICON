@@ -1,14 +1,17 @@
-from typing import List, Union, Tuple, Optional, Iterable, Hashable, Callable, Dict, Any, Literal
-from dataclasses import dataclass, field, fields, replace
-from utils.taxo_utils import Taxonomy
 import re
+from dataclasses import dataclass, field, fields, replace
+from typing import Any, Callable, Dict, Hashable, Iterable, List, Literal, Optional, Tuple, Union
+
 import numpy as np
+
+from icon.core.taxonomy import Taxonomy
+
 
 @dataclass
 class tree_config:
-    
+
     def arglist(self, flat: bool = True):
-        
+
         args = []
         for f in fields(self):
             F = getattr(self,f.name)
@@ -20,13 +23,13 @@ class tree_config:
             else:
                 args.append(f.name)
         return args
-    
+
     def leaf_fields(self):
-        
+
         return [f.name for f in fields(self) if not isinstance(getattr(self,f.name),tree_config)]
-    
+
     def nonleaf_fields(self):
-        
+
         return [f.name for f in fields(self) if isinstance(getattr(self,f.name),tree_config)]
 
 @dataclass
@@ -65,12 +68,12 @@ class icon_manual_config(tree_config):
     input_concepts: List[str]=field(default_factory = list)
     manual_concept_bases: List[List[Union[int, str]]] = None
     auto_bases: bool = False
-    
+
 @dataclass
 class icon_ret_config(tree_config):
     retrieve_size: int = 10
     restrict_combinations: bool = True
-    
+
 @dataclass
 class icon_gen_config(tree_config):
     ignore_label: List[str]=field(default_factory = list)
@@ -88,7 +91,7 @@ class icon_search_config(tree_config):
     tolerance: int = 0
     force_base_subsumptions: bool = False
     force_prune: bool = False
-    
+
 @dataclass
 class icon_sub_config(tree_config):
     subgraph: icon_subgraph_config = field(default_factory=lambda: icon_subgraph_config())
@@ -180,14 +183,14 @@ def locate_arg(conf: tree_config, arg: str) -> str:
     return ''
 
 def Update_config(conf: tree_config, arg: str, value: Any) -> tree_config:
-    
+
     location = locate_arg(conf,arg)
     if location == '':
         raise KeyError(f'{arg}')
     return recursive_replace(conf, location, value)
 
 def recursive_replace(root_obj: Any, replace_str: str, replace_with: Any) -> Any:
-    
+
     split_str = replace_str.split(".")
     if len(split_str) == 1:
         return replace(root_obj, **{split_str[0]: replace_with})
