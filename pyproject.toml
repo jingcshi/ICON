@@ -28,6 +28,10 @@ training = [
     "pandas",
     "scikit-learn",
 ]
+gui = [
+    "PyQt5",
+    "matplotlib",
+]
 dev = [
     "pytest",
     "ruff",
