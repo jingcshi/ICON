@@ -107,7 +107,7 @@ def _build_tree_rows(adapter, expanded_keys: set, selected_id) -> list:
     """
     taxo = adapter.taxo
     roots = sorted(
-        [n for n in taxo.nodes if taxo.in_degree(n) == 0],
+        taxo.get_GCD([]),   # nodes with no parents (out_degree==0 in child→parent graph)
         key=lambda n: taxo.get_label(n),
     )
 
