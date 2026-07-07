@@ -1,0 +1,100 @@
+# ICON configuration example
+# Copy to config.yml and adjust. Load with:
+#   from icon.config.config import icon_config_from_yaml
+#   cfg = icon_config_from_yaml("config.yml")
+#   icon = ICON(data=taxo, ..., **vars(cfg))   # or pass cfg directly
+#
+# All keys are optional; unset keys keep their defaults.
+
+# ── Global ────────────────────────────────────────────────────────────────────
+
+# Operating mode: auto | semiauto | manual
+mode: auto
+
+# Random seed for numpy and torch (set to null for non-deterministic)
+rand_seed: 114514
+
+# Remove redundant edges from enriched taxonomy at the end
+transitive_reduction: true
+
+# Logging verbosity: 0 = silent, 1 = progress bars (default), 2 = verbose
+# Can also be a list of log categories, e.g. [system, insert]
+logging: 1
+
+# ── Auto mode ─────────────────────────────────────────────────────────────────
+
+auto_config:
+  # Stop after this many outer loop iterations (null = run until convergence)
+  max_outer_loop: null
+
+# ── Semiauto mode ─────────────────────────────────────────────────────────────
+
+semiauto_config:
+  # Seed concepts to enrich in semiauto mode (node IDs or labels)
+  semiauto_seeds: []
+
+# ── Manual mode ───────────────────────────────────────────────────────────────
+
+manual_config:
+  # Candidate labels to insert (manual mode)
+  input_concepts: []
+  # Explicit base sets for each concept [[id, ...], ...] (null = auto-detect)
+  manual_concept_bases: null
+  # Auto-detect bases if manual_concept_bases is null
+  auto_bases: false
+
+# ── Retrieval ─────────────────────────────────────────────────────────────────
+
+ret_config:
+  # Number of nearest neighbours to retrieve per query
+  retrieve_size: 10
+  # Avoid enumerating all subsets; only use disjoint combinations
+  restrict_combinations: true
+
+# ── Generation ────────────────────────────────────────────────────────────────
+
+gen_config:
+  # Labels to treat as uninformative (filtered before generating)
+  ignore_label:
+    - ""
+    - All categories
+    - Root Concept
+    - Thing
+    - Allcats
+    - Everything
+    - root
+  # Discard generated concepts that are subsets of existing ones
+  filter_subset: true
+
+# ── Concept placement ─────────────────────────────────────────────────────────
+
+sub_config:
+
+  subgraph:
+    # Restrict search to a local subgraph around retrieved concepts
+    subgraph_crop: true
+    # Edge label combinations to always include in the subgraph
+    # Each entry is [child_label, parent_label]
+    subgraph_force:
+      - [auto, original]
+    # Raise an error if a forced edge cannot be resolved
+    subgraph_strict: true
+
+  search:
+    # Minimum subsumption probability to accept a placement
+    threshold: 0.5
+    # Allow this many sub-threshold hops before giving up
+    tolerance: 0
+    # Always assert direct parent/child edges before searching
+    force_base_subsumptions: false
+    # Remove dominated placements from the result
+    force_prune: false
+
+# ── Taxonomy update ───────────────────────────────────────────────────────────
+
+update_config:
+  # Write inserted concepts back into the taxonomy
+  do_update: true
+  # Check for lexically identical concepts before inserting
+  do_lexical_check: true
+  # eqv_score_func: not configurable via YAML (pass as a callable to ICON())

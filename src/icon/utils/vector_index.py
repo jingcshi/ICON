@@ -1,7 +1,15 @@
 from typing import Hashable, List, Literal, Tuple, Union
 
-import faiss
 import numpy as np
+
+_faiss = None
+
+def _get_faiss():
+    global _faiss
+    if _faiss is None:
+        import faiss
+        _faiss = faiss
+    return _faiss
 
 
 class FaissVectorStore:
@@ -14,6 +22,7 @@ class FaissVectorStore:
                 metric: Literal[0, 1] = 0, # O for inner product and 1 for L2
                 normalize: bool = False) -> None:
 
+        faiss = _get_faiss()
         vectors = vectors.astype(np.float32)
         if normalize:
             vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
@@ -69,6 +78,7 @@ class FaissVectorStore:
         if exhaustive and self.is_ivf:
             nprobe = self.index.nlist
         search_params = {}
+        faiss = _get_faiss()
         if subset is not None:
             search_params['sel'] = faiss.IDSelectorArray(np.array(subset, dtype=np.int64))
         if nprobe is not None and self.is_ivf:

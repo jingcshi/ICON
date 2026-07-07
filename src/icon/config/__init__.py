@@ -1,6 +1,8 @@
 from icon.config.config import (
     Update_config,
     icon_auto_config,
+    icon_config_from_dict,
+    icon_config_from_yaml,
     icon_caches,
     icon_config,
     icon_gen_config,
@@ -39,4 +41,5 @@ __all__ = [
     "iconforcategorymove_selection_config", "iconforcategorymove_auto_config",
     "iconforcategorymove_manual_config", "iconforcategorymove_config",
     "locate_arg", "Update_config", "recursive_replace",
+    "icon_config_from_dict", "icon_config_from_yaml",
 ]
