@@ -1,26 +1,16 @@
 # icon-dev conda environment
-# Install path: /data/ebay-slc-h200/notebooks/jingcshi/conda_envs/icon-dev
 #
 # Create:
-#   /home/jingcshi/miniforge3/bin/conda create \
-#     --prefix /data/ebay-slc-h200/notebooks/jingcshi/conda_envs/icon-dev \
-#     python=3.10 -y
+#   conda create --name icon-dev python=3.10 -y
 #
-# Then install deps (clear PYTHONPATH to avoid Krylov system-path interference):
-#   ENV=/data/ebay-slc-h200/notebooks/jingcshi/conda_envs/icon-dev
-#   PIP_CACHE=$ENV/../.pip_cache
-#   PIP_TMP=$ENV/../.pip_tmp
-#   mkdir -p $PIP_CACHE $PIP_TMP
+# Then install deps:
+#   pip install --no-cache-dir \
+#     torch==2.11.0+cu128 \
+#     --index-url https://download.pytorch.org/whl/cu128
 #
-#   PYTHONPATH="" TMPDIR=$PIP_TMP \
-#     $ENV/bin/pip install --no-cache-dir \
-#       torch==2.11.0+cu128 \
-#       --index-url https://download.pytorch.org/whl/cu128
-#
-#   PYTHONPATH="" TMPDIR=$PIP_TMP \
-#     $ENV/bin/pip install --no-cache-dir --ignore-installed \
-#       faiss-gpu owlready2 nltk transformers datasets evaluate \
-#       info-nce-pytorch pandas scikit-learn ruff mypy pytest click
+#   pip install --no-cache-dir --ignore-installed \
+#     faiss-gpu rdflib pyyaml nltk transformers datasets evaluate \
+#     info-nce-pytorch pandas scikit-learn ruff mypy pytest click
 
 name: icon-dev
 channels:
@@ -32,7 +22,8 @@ dependencies:
     - torch==2.11.0+cu128
     # Core ICON dependencies
     - faiss-gpu
-    - owlready2
+    - rdflib
+    - pyyaml
     - networkx
     - nltk
     - numpy
