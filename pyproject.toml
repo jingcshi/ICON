@@ -29,8 +29,9 @@ training = [
     "scikit-learn",
 ]
 gui = [
-    "PyQt5",
-    "matplotlib",
+    "dash",
+    "dash-cytoscape",
+    "dash-bootstrap-components",
 ]
 dev = [
     "pytest",

@@ -48,6 +48,21 @@ class TaxonomyAdapter:
         self._path = dest
         self._dirty = False
 
+    def to_json_string(self) -> str:
+        """Serialise the taxonomy to a JSON string (for browser download)."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False, mode='w') as f:
+            tmp = f.name
+        try:
+            self._taxo.to_json(tmp)
+            with open(tmp) as f:
+                return f.read()
+        finally:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
     # ── Properties ────────────────────────────────────────────────────────────
 
     @property
