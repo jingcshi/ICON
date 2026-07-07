@@ -25,8 +25,7 @@ _RADIUS = 2   # neighbourhood hops
 
 def register(app):
     _register_file_callbacks(app)
-    _register_selection_callbacks(app)
-    _register_tree_callback(app)
+    _register_tree_callbacks(app)
     _register_graph_callback(app)
     _register_node_panel_callback(app)
     _register_edit_callbacks(app)
@@ -88,32 +87,131 @@ def _build_cyto_elements(node_id):
     return nodes + edges
 
 
-def _build_tree_items(adapter) -> list:
+def _path_key(path: tuple) -> str:
+    """Stable string key for a root-to-node path (used in store-tree-expanded)."""
+    return "|".join(str(n) for n in path)
+
+
+def _build_tree_rows(adapter, expanded_keys: set, selected_id) -> list:
+    """
+    Render the tree as a flat list of rows.
+
+    Each visible row corresponds to one occurrence of a node along a specific
+    root-to-node path.  Expansion state is keyed by path so that a node
+    appearing in multiple places (DAG) can be independently expanded.
+
+    Highlight rules:
+      - selected node: bold + red text at every occurrence
+      - ancestors-of-selected (nodes above selected in any path): italic hint
+        only at collapsed ancestors whose subtree contains selected
+    """
     taxo = adapter.taxo
-    roots = [n for n in taxo.nodes if taxo.in_degree(n) == 0]
+    roots = sorted(
+        [n for n in taxo.nodes if taxo.in_degree(n) == 0],
+        key=lambda n: taxo.get_label(n),
+    )
 
-    def render_node(nid, depth=0):
+    # Pre-compute all ancestors of selected node for hinting
+    ancestor_ids: set = set()
+    if selected_id is not None and selected_id in taxo.nodes:
+        frontier = {selected_id}
+        while frontier:
+            next_f = set()
+            for n in frontier:
+                for p in taxo.get_parents(n):
+                    if p not in ancestor_ids:
+                        ancestor_ids.add(p)
+                        next_f.add(p)
+            frontier = next_f
+
+    rows = []
+
+    def visit(nid, path: tuple, depth: int):
+        path_k = _path_key(path)
         lbl = taxo.get_label(nid)
-        children_ids = list(taxo.get_children(nid))
-        toggle = html.Details([
-            html.Summary(
-                f"{'  ' * depth}{lbl} [{nid}]",
-                id={'type': 'tree-node', 'index': nid},
-                style={'cursor': 'pointer', 'userSelect': 'none',
-                       'padding': '1px 2px', 'whiteSpace': 'nowrap'},
-            ),
-            *[render_node(c, depth + 1) for c in children_ids],
-        ] if children_ids else [
-            html.Summary(
-                f"{'  ' * depth}{lbl} [{nid}]",
-                id={'type': 'tree-node', 'index': nid},
-                style={'cursor': 'pointer', 'userSelect': 'none',
-                       'listStyle': 'none', 'padding': '1px 2px', 'whiteSpace': 'nowrap'},
-            ),
-        ], open=(depth == 0))
-        return toggle
+        children_ids = sorted(taxo.get_children(nid), key=lambda n: taxo.get_label(n))
+        is_expanded = path_k in expanded_keys
+        is_selected = (nid == selected_id)
 
-    return [render_node(r) for r in roots]
+        # Hint: this collapsed node is an ancestor of the selected node
+        # and the selected node is not already visible through this subtree
+        is_hint = (
+            not is_selected
+            and nid in ancestor_ids
+            and not is_expanded
+        )
+
+        # Toggle button (▶ / ▼) or blank spacer for leaf
+        if children_ids:
+            toggle_btn = html.Span(
+                '▼' if is_expanded else '▶',
+                id={'type': 'tree-toggle', 'index': path_k},
+                style={
+                    'cursor': 'pointer',
+                    'marginRight': '4px',
+                    'fontSize': '9px',
+                    'color': '#666',
+                    'userSelect': 'none',
+                    'display': 'inline-block',
+                    'width': '12px',
+                },
+                title='Expand/collapse',
+            )
+        else:
+            toggle_btn = html.Span(
+                '·',
+                style={
+                    'marginRight': '4px',
+                    'fontSize': '9px',
+                    'color': '#ccc',
+                    'display': 'inline-block',
+                    'width': '12px',
+                },
+            )
+
+        label_style = {
+            'cursor': 'pointer',
+            'userSelect': 'none',
+            'whiteSpace': 'nowrap',
+            'overflow': 'hidden',
+            'textOverflow': 'ellipsis',
+            'maxWidth': '160px',
+            'display': 'inline-block',
+            'verticalAlign': 'middle',
+        }
+        if is_selected:
+            label_style.update({'fontWeight': 'bold', 'color': '#E05C3A'})
+        elif is_hint:
+            label_style.update({'fontStyle': 'italic', 'color': '#888'})
+
+        label_span = html.Span(
+            f"{lbl}",
+            id={'type': 'tree-node', 'index': nid},
+            style=label_style,
+            title=f"{lbl}  [{nid}]",
+        )
+
+        row = html.Div(
+            [toggle_btn, label_span],
+            style={
+                'paddingLeft': f'{depth * 14}px',
+                'paddingTop': '1px',
+                'paddingBottom': '1px',
+                'lineHeight': '1.4',
+                'fontSize': '12px',
+                'backgroundColor': '#fff3f0' if is_selected else 'transparent',
+            },
+        )
+        rows.append(row)
+
+        if is_expanded:
+            for child in children_ids:
+                visit(child, path + (child,), depth + 1)
+
+    for root in roots:
+        visit(root, (root,), 0)
+
+    return rows
 
 
 def _dropdown_options(node_ids, exclude=None):
@@ -155,6 +253,7 @@ def _register_file_callbacks(app):
         Output('store-file-path', 'data'),
         Output('store-dirty', 'data'),
         Output('store-action-trigger', 'data'),
+        Output('store-tree-expanded', 'data', allow_duplicate=True),
         Output('toast-notify', 'children'),
         Output('toast-notify', 'header'),
         Output('toast-notify', 'is_open'),
@@ -175,12 +274,11 @@ def _register_file_callbacks(app):
             tmp_path = f.name
         try:
             _ADAPTER.load(tmp_path)
-            # Store original filename hint (we don't know the real path after upload)
             _ADAPTER._path = None   # will require Save As for first save
             _ADAPTER._upload_name = filename or 'taxonomy'
-            return True, None, False, (trigger or 0) + 1, f"Loaded {filename}", 'Open', True
+            return True, None, False, (trigger or 0) + 1, [], f"Loaded {filename}", 'Open', True
         except Exception as e:
-            return no_update, no_update, no_update, no_update, str(e), 'Load Error', True
+            return no_update, no_update, no_update, no_update, no_update, str(e), 'Load Error', True
         finally:
             try:
                 os.unlink(tmp_path)
@@ -248,10 +346,11 @@ def _register_file_callbacks(app):
             return no_update, no_update, str(e), 'Save Error', True
 
 
-# ── Selection: tree click or cyto tap ────────────────────────────────────────
+# ── Tree panel + selection ────────────────────────────────────────────────────
 
-def _register_selection_callbacks(app):
+def _register_tree_callbacks(app):
 
+    # Cyto tap or tree-node label click → update selected store
     @app.callback(
         Output('store-selected', 'data'),
         Input({'type': 'tree-node', 'index': dash.ALL}, 'n_clicks'),
@@ -269,28 +368,46 @@ def _register_selection_callbacks(app):
             return tap_data.get('node_id')
         raise PreventUpdate
 
+    # Toggle button click → flip path key in store-tree-expanded
+    @app.callback(
+        Output('store-tree-expanded', 'data'),
+        Input({'type': 'tree-toggle', 'index': dash.ALL}, 'n_clicks'),
+        State('store-tree-expanded', 'data'),
+        prevent_initial_call=True,
+    )
+    def on_toggle(toggle_clicks, expanded):
+        triggered = callback_context.triggered_id
+        if not isinstance(triggered, dict) or triggered.get('type') != 'tree-toggle':
+            raise PreventUpdate
+        path_k = triggered['index']
+        expanded = list(expanded or [])
+        if path_k in expanded:
+            expanded.remove(path_k)
+        else:
+            expanded.append(path_k)
+        return expanded
 
-# ── Tree panel ────────────────────────────────────────────────────────────────
-
-def _register_tree_callback(app):
-
+    # Re-render tree rows whenever expansion, selection, or taxonomy changes
     @app.callback(
         Output('tree-container', 'children'),
+        Input('store-tree-expanded', 'data'),
+        Input('store-selected', 'data'),
         Input('store-action-trigger', 'data'),
         Input('store-loaded', 'data'),
         Input('search-input', 'value'),
         prevent_initial_call=False,
     )
-    def update_tree(trigger, loaded, search):
+    def update_tree(expanded, selected_id, trigger, loaded, search):
         if not loaded or not _ADAPTER.loaded:
             return html.P('No taxonomy loaded', className='text-muted small p-2')
 
         if search and search.strip():
-            return _filtered_tree(search.strip().lower())
+            return _filtered_tree(search.strip().lower(), selected_id)
 
-        return _build_tree_items(_ADAPTER)
+        expanded_keys = set(expanded or [])
+        return _build_tree_rows(_ADAPTER, expanded_keys, selected_id)
 
-    def _filtered_tree(text: str) -> list:
+    def _filtered_tree(text: str, selected_id) -> list:
         taxo = _ADAPTER.taxo
         matching = [
             n for n in taxo.nodes
@@ -298,14 +415,22 @@ def _register_tree_callback(app):
         ]
         if not matching:
             return [html.P('No matches', className='text-muted small p-2')]
-        return [
-            html.Div(
-                f"{taxo.get_label(n)}  [{n}]",
+        rows = []
+        for n in sorted(matching, key=lambda x: taxo.get_label(x)):
+            lbl = taxo.get_label(n)
+            is_sel = (n == selected_id)
+            style = {
+                'cursor': 'pointer', 'padding': '2px 4px', 'fontSize': '12px',
+                'fontWeight': 'bold' if is_sel else 'normal',
+                'color': '#E05C3A' if is_sel else 'inherit',
+                'backgroundColor': '#fff3f0' if is_sel else 'transparent',
+            }
+            rows.append(html.Div(
+                f"{lbl}  [{n}]",
                 id={'type': 'tree-node', 'index': n},
-                style={'cursor': 'pointer', 'padding': '2px 4px', 'fontSize': '12px'},
-            )
-            for n in matching
-        ]
+                style=style,
+            ))
+        return rows
 
 
 # ── Graph canvas ──────────────────────────────────────────────────────────────

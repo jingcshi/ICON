@@ -181,6 +181,7 @@ def build_layout() -> html.Div:
         dcc.Store(id='store-dirty', data=False),        # unsaved changes
         dcc.Store(id='store-file-path', data=None),     # current file path
         dcc.Store(id='store-action-trigger', data=0),   # bump to re-render after edit
+        dcc.Store(id='store-tree-expanded', data=[]),   # list of expanded node_ids in tree
         # Notification toast
         dbc.Toast(
             id='toast-notify',
