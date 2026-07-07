@@ -189,12 +189,3 @@ data/raw/items/
 *repr*
 *cat_desc*
 .DS_store
-
-# Session handoff / memory
-.remember/
-
-# conda / local envs
-conda_envs/
-
-# AI development traces (CLAUDE.md tracked on internal branch)
-TODO.md
