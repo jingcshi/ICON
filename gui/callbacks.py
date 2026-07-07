@@ -92,6 +92,44 @@ def _path_key(path: tuple) -> str:
     return "|".join(str(n) for n in path)
 
 
+def _highlight_spans(label: str, query: str) -> list:
+    """Return a list of Span elements with query occurrences highlighted in bold."""
+    result = []
+    lower = label.lower()
+    q = query.lower()
+    i = 0
+    while i < len(label):
+        j = lower.find(q, i)
+        if j == -1:
+            result.append(label[i:])
+            break
+        if j > i:
+            result.append(label[i:j])
+        result.append(html.Span(label[j:j + len(q)], style={'fontWeight': 'bold', 'color': '#1a73e8'}))
+        i = j + len(q)
+    return result
+
+
+def _ancestor_path_keys(taxo, node_id) -> set:
+    """Return path_keys for all ancestor paths of node_id (used to auto-expand tree to a node)."""
+    # BFS upward collecting all root-to-node paths
+    keys = set()
+    # Each frontier element is a path from some ancestor down to an initial parent of node_id
+    # We collect all paths from root to node_id
+    # Work top-down: find all root-to-node paths via DFS
+    stack = [(n, (n,)) for n in taxo.get_GCD([])]
+    while stack:
+        cur, path = stack.pop()
+        if cur == node_id:
+            # Add path_keys for every ancestor prefix (those need to be expanded)
+            for length in range(1, len(path)):
+                keys.add(_path_key(path[:length]))
+            continue
+        for child in taxo.get_children(cur):
+            stack.append((child, path + (child,)))
+    return keys
+
+
 def _build_tree_rows(adapter, expanded_keys: set, selected_id) -> list:
     """
     Render the tree as a flat list of rows.
@@ -254,6 +292,7 @@ def _register_file_callbacks(app):
         Output('store-dirty', 'data'),
         Output('store-action-trigger', 'data'),
         Output('store-tree-expanded', 'data', allow_duplicate=True),
+        Output('store-search-expanded', 'data', allow_duplicate=True),
         Output('toast-notify', 'children'),
         Output('toast-notify', 'header'),
         Output('toast-notify', 'is_open'),
@@ -276,9 +315,9 @@ def _register_file_callbacks(app):
             _ADAPTER.load(tmp_path)
             _ADAPTER._path = None   # will require Save As for first save
             _ADAPTER._upload_name = filename or 'taxonomy'
-            return True, None, False, (trigger or 0) + 1, [], f"Loaded {filename}", 'Open', True
+            return True, None, False, (trigger or 0) + 1, [], [], f"Loaded {filename}", 'Open', True
         except Exception as e:
-            return no_update, no_update, no_update, no_update, no_update, str(e), 'Load Error', True
+            return no_update, no_update, no_update, no_update, no_update, no_update, str(e), 'Load Error', True
         finally:
             try:
                 os.unlink(tmp_path)
@@ -393,50 +432,82 @@ def _register_tree_callbacks(app):
             expanded.append(path_k)
         return expanded
 
+    # Live search → suggestion dropdown with highlighted matches
+    @app.callback(
+        Output('search-dropdown', 'children'),
+        Output('search-dropdown', 'style'),
+        Input('search-input', 'value'),
+        State('store-loaded', 'data'),
+        prevent_initial_call=False,
+    )
+    def update_suggestions(search, loaded):
+        hidden = {'display': 'none'}
+        visible = {'display': 'block', 'position': 'absolute', 'zIndex': 1000,
+                   'left': 0, 'right': 0, 'top': '100%',
+                   'background': '#fff', 'border': '1px solid #dee2e6',
+                   'borderRadius': '4px', 'boxShadow': '0 2px 8px rgba(0,0,0,0.12)',
+                   'maxHeight': '220px', 'overflowY': 'auto'}
+        if not loaded or not _ADAPTER.loaded or not search or not search.strip():
+            return [], hidden
+        text = search.strip().lower()
+        taxo = _ADAPTER.taxo
+        matches = sorted(
+            [n for n in taxo.nodes if text in taxo.get_label(n).lower() or text in str(n).lower()],
+            key=lambda n: taxo.get_label(n),
+        )[:20]
+        if not matches:
+            return [html.Div('No matches', className='text-muted small px-2 py-1')], visible
+        rows = []
+        for n in matches:
+            lbl = taxo.get_label(n)
+            rows.append(html.Div(
+                _highlight_spans(lbl, text),
+                id={'type': 'tree-node', 'index': n},
+                style={'cursor': 'pointer', 'padding': '3px 8px', 'fontSize': '12px'},
+                title=f"{lbl}  [{n}]",
+            ))
+        return rows, visible
+
+    # Clicking a suggestion: expand ancestor paths + select node + clear dropdown
+    @app.callback(
+        Output('store-search-expanded', 'data'),
+        Output('search-input', 'value'),
+        Input({'type': 'tree-node', 'index': dash.ALL}, 'n_clicks'),
+        State('store-loaded', 'data'),
+        State('search-input', 'value'),
+        prevent_initial_call=True,
+    )
+    def on_suggestion_click(tree_clicks, loaded, search):
+        triggered = callback_context.triggered_id
+        if not isinstance(triggered, dict) or triggered.get('type') != 'tree-node':
+            raise PreventUpdate
+        if not callback_context.triggered or callback_context.triggered[0].get('value') is None:
+            raise PreventUpdate
+        # Only act when the dropdown is open (search text present)
+        if not search or not search.strip():
+            raise PreventUpdate
+        if not loaded or not _ADAPTER.loaded:
+            raise PreventUpdate
+        node_id = triggered['index']
+        # Collect all root-to-node paths and their ancestor path_keys
+        expanded = _ancestor_path_keys(_ADAPTER.taxo, node_id)
+        return list(expanded), ''
+
     # Re-render tree rows whenever expansion, selection, or taxonomy changes
     @app.callback(
         Output('tree-container', 'children'),
         Input('store-tree-expanded', 'data'),
+        Input('store-search-expanded', 'data'),
         Input('store-selected', 'data'),
         Input('store-action-trigger', 'data'),
         Input('store-loaded', 'data'),
-        Input('search-input', 'value'),
         prevent_initial_call=False,
     )
-    def update_tree(expanded, selected_id, trigger, loaded, search):
+    def update_tree(expanded, search_expanded, selected_id, trigger, loaded):
         if not loaded or not _ADAPTER.loaded:
             return html.P('No taxonomy loaded', className='text-muted small p-2')
-
-        if search and search.strip():
-            return _filtered_tree(search.strip().lower(), selected_id)
-
-        expanded_keys = set(expanded or [])
+        expanded_keys = set(expanded or []) | set(search_expanded or [])
         return _build_tree_rows(_ADAPTER, expanded_keys, selected_id)
-
-    def _filtered_tree(text: str, selected_id) -> list:
-        taxo = _ADAPTER.taxo
-        matching = [
-            n for n in taxo.nodes
-            if text in taxo.get_label(n).lower() or text in str(n).lower()
-        ]
-        if not matching:
-            return [html.P('No matches', className='text-muted small p-2')]
-        rows = []
-        for n in sorted(matching, key=lambda x: taxo.get_label(x)):
-            lbl = taxo.get_label(n)
-            is_sel = (n == selected_id)
-            style = {
-                'cursor': 'pointer', 'padding': '2px 4px', 'fontSize': '12px',
-                'fontWeight': 'bold' if is_sel else 'normal',
-                'color': '#E05C3A' if is_sel else 'inherit',
-                'backgroundColor': '#fff3f0' if is_sel else 'transparent',
-            }
-            rows.append(html.Div(
-                f"{lbl}  [{n}]",
-                id={'type': 'tree-node', 'index': n},
-                style=style,
-            ))
-        return rows
 
 
 # ── Graph canvas ──────────────────────────────────────────────────────────────

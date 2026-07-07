@@ -87,7 +87,14 @@ def build_layout() -> html.Div:
 
         # ── Search ──
         _section('Search'),
-        dbc.Input(id='search-input', placeholder='Search nodes…', size='sm', debounce=True, className='mb-2'),
+        html.Div([
+            dbc.Input(id='search-input', placeholder='Search nodes…', size='sm', className='mb-1'),
+            html.Div(id='search-dropdown', style={'display': 'none', 'position': 'absolute',
+                'zIndex': 1000, 'left': 0, 'right': 0, 'top': '100%',
+                'background': '#fff', 'border': '1px solid #dee2e6',
+                'borderRadius': '4px', 'boxShadow': '0 2px 8px rgba(0,0,0,0.12)',
+                'maxHeight': '220px', 'overflowY': 'auto'}),
+        ], style={'position': 'relative'}, className='mb-2'),
 
         # ── Tree ──
         _section('Taxonomy Tree'),
@@ -181,7 +188,8 @@ def build_layout() -> html.Div:
         dcc.Store(id='store-dirty', data=False),        # unsaved changes
         dcc.Store(id='store-file-path', data=None),     # current file path
         dcc.Store(id='store-action-trigger', data=0),   # bump to re-render after edit
-        dcc.Store(id='store-tree-expanded', data=[]),   # list of expanded node_ids in tree
+        dcc.Store(id='store-tree-expanded', data=[]),    # path_keys expanded by user
+        dcc.Store(id='store-search-expanded', data=[]), # path_keys auto-expanded by search
         # Notification toast
         dbc.Toast(
             id='toast-notify',
