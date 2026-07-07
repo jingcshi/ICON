@@ -363,6 +363,9 @@ def _register_tree_callbacks(app):
             raise PreventUpdate
         triggered = callback_context.triggered_id
         if isinstance(triggered, dict) and triggered.get('type') == 'tree-node':
+            # n_clicks is None when component just appeared (tree re-render); not a real click
+            if not callback_context.triggered or callback_context.triggered[0].get('value') is None:
+                raise PreventUpdate
             return triggered['index']
         if tap_data:
             return tap_data.get('node_id')
@@ -378,6 +381,9 @@ def _register_tree_callbacks(app):
     def on_toggle(toggle_clicks, expanded):
         triggered = callback_context.triggered_id
         if not isinstance(triggered, dict) or triggered.get('type') != 'tree-toggle':
+            raise PreventUpdate
+        # n_clicks is None when the component just appeared (tree re-render); not a real click
+        if not callback_context.triggered or callback_context.triggered[0].get('value') is None:
             raise PreventUpdate
         path_k = triggered['index']
         expanded = list(expanded or [])
