@@ -17,7 +17,7 @@ CYTO_STYLESHEET = [
             'font-size': '11px',
             'text-valign': 'center',
             'text-halign': 'center',
-            'background-color': '#5B9BD5',
+            'background-color': '#9B59B6',
             'color': '#fff',
             'width': 'label',
             'height': 'label',
@@ -29,15 +29,19 @@ CYTO_STYLESHEET = [
     },
     {
         'selector': 'node[role = "selected"]',
-        'style': {'background-color': '#E05C3A'},
+        'style': {'background-color': '#FFD966', 'color': '#000'},
     },
     {
         'selector': 'node[role = "ancestor"]',
-        'style': {'background-color': '#A8D08D', 'color': '#000'},
+        'style': {'background-color': '#E05C3A', 'color': '#fff'},
     },
     {
         'selector': 'node[role = "child"]',
-        'style': {'background-color': '#FFD966', 'color': '#000'},
+        'style': {'background-color': '#A8D08D', 'color': '#000'},
+    },
+    {
+        'selector': 'node[role = "context"]',
+        'style': {'background-color': '#9B59B6', 'color': '#fff'},
     },
     {
         'selector': 'edge',
@@ -47,6 +51,14 @@ CYTO_STYLESHEET = [
             'target-arrow-color': '#999',
             'line-color': '#999',
             'width': 1.5,
+        },
+    },
+    {
+        'selector': 'edge:selected',
+        'style': {
+            'line-color': '#E05C3A',
+            'target-arrow-color': '#E05C3A',
+            'width': 2.5,
         },
     },
 ]
@@ -124,10 +136,10 @@ def build_layout() -> html.Div:
         ),
         # Legend
         html.Div([
-            _legend_dot('#E05C3A', 'Selected'),
-            _legend_dot('#A8D08D', 'Parent'),
-            _legend_dot('#FFD966', 'Child'),
-            _legend_dot('#5B9BD5', 'Context'),
+            _legend_dot('#FFD966', 'Selected'),
+            _legend_dot('#E05C3A', 'Parent'),
+            _legend_dot('#A8D08D', 'Child'),
+            _legend_dot('#9B59B6', 'Context'),
         ], className='d-flex gap-3 mt-1', style={'fontSize': '12px'}),
     ], width=6)
 

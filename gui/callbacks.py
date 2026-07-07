@@ -34,25 +34,44 @@ def register(app):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _node_info_children(node_id) -> list:
+def _node_info_children(node_id, title: str = 'Node') -> list:
     taxo = _ADAPTER.taxo
     label    = taxo.get_label(node_id)
     depth    = taxo.get_depth(node_id)
     parents  = list(taxo.get_parents(node_id))
     children = list(taxo.get_children(node_id))
 
-    def fmt(ids):
+    def fmt_clickable(ids):
         if not ids:
-            return '—'
-        return ', '.join(f"{taxo.get_label(n)} [{n}]" for n in ids)
+            return [html.Span('—')]
+        parts = []
+        for i, n in enumerate(ids):
+            lbl = taxo.get_label(n)
+            parts.append(html.Span(
+                f"{lbl} [{n}]",
+                id={'type': 'tree-node', 'index': n},
+                style={
+                    'cursor': 'pointer',
+                    'color': '#1a73e8',
+                    'textDecoration': 'underline',
+                    'userSelect': 'none',
+                },
+                title=f"Jump to {lbl}",
+            ))
+            if i < len(ids) - 1:
+                parts.append(', ')
+        return parts
 
-    return [
+    header = [] if title == 'Node' else [
+        html.P(title, className='fw-bold mb-1', style={'fontSize': '12px', 'color': '#555'}),
+    ]
+    return header + [
         html.Table([
             html.Tr([html.Th('ID'),       html.Td(str(node_id))]),
             html.Tr([html.Th('Label'),    html.Td(label)]),
             html.Tr([html.Th('Depth'),    html.Td(str(depth))]),
-            html.Tr([html.Th('Parents'),  html.Td(fmt(parents),  style={'wordBreak': 'break-word'})]),
-            html.Tr([html.Th('Children'), html.Td(fmt(children), style={'wordBreak': 'break-word'})]),
+            html.Tr([html.Th('Parents'),  html.Td(fmt_clickable(parents), style={'wordBreak': 'break-word'})]),
+            html.Tr([html.Th('Children'), html.Td(fmt_clickable(children), style={'wordBreak': 'break-word'})]),
         ], className='table table-sm table-borderless', style={'fontSize': '12px'}),
     ]
 
@@ -80,10 +99,17 @@ def _build_cyto_elements(node_id):
             lbl = lbl[:18] + '…'
         nodes.append({'data': {'id': str(n), 'label': lbl, 'role': role, 'node_id': n}})
 
-    edges = [
-        {'data': {'source': str(u), 'target': str(v)}}
-        for u, v in sub.edges
-    ]
+    edges = []
+    for u, v, edata in sub.edges(data=True):
+        edge_label = edata.get('label', '')
+        edges.append({'data': {
+            'id': f'e{u}_{v}',
+            'source': str(u),
+            'target': str(v),
+            'edge_label': edge_label,
+            'src_id': u,
+            'tgt_id': v,
+        }})
     return nodes + edges
 
 
@@ -207,6 +233,8 @@ def _build_tree_rows(adapter, expanded_keys: set, selected_id) -> list:
                 },
             )
 
+        is_ancestor = (nid in ancestor_ids) and not is_selected
+
         label_style = {
             'cursor': 'pointer',
             'userSelect': 'none',
@@ -229,6 +257,13 @@ def _build_tree_rows(adapter, expanded_keys: set, selected_id) -> list:
             title=f"{lbl}  [{nid}]",
         )
 
+        if is_selected:
+            bg = '#fff3f0'
+        elif is_ancestor or is_hint:
+            bg = '#fff0f0'
+        else:
+            bg = 'transparent'
+
         row = html.Div(
             [toggle_btn, label_span],
             style={
@@ -237,7 +272,7 @@ def _build_tree_rows(adapter, expanded_keys: set, selected_id) -> list:
                 'paddingBottom': '1px',
                 'lineHeight': '1.4',
                 'fontSize': '12px',
-                'backgroundColor': '#fff3f0' if is_selected else 'transparent',
+                'backgroundColor': bg,
             },
         )
         rows.append(row)
@@ -546,10 +581,12 @@ def _register_node_panel_callback(app):
         Output('btn-undo', 'disabled'),
         Input('store-selected', 'data'),
         Input('store-action-trigger', 'data'),
+        Input('cyto-graph', 'tapEdgeData'),
+        Input('cyto-graph', 'tapOnCanvasData'),
         State('store-loaded', 'data'),
         prevent_initial_call=False,
     )
-    def update_panel(selected_id, trigger, loaded):
+    def update_panel(selected_id, trigger, tap_edge, tap_canvas, loaded):
         from layout import _empty_info
         no_node = [_empty_info(), True, True, True, True, True, True]
 
@@ -557,6 +594,43 @@ def _register_node_panel_callback(app):
             return no_node
 
         has_undo = bool(_ADAPTER._undo_stack)
+        # Use triggered prop to distinguish edge vs canvas tap from the same component
+        triggered_prop = callback_context.triggered[0]['prop_id'] if callback_context.triggered else ''
+
+        # Edge tap: show edge properties, disable edit buttons
+        if 'tapEdgeData' in triggered_prop and tap_edge:
+            taxo = _ADAPTER.taxo
+            src = tap_edge.get('src_id')
+            tgt = tap_edge.get('tgt_id')
+            edge_label = tap_edge.get('edge_label', '')
+            src_lbl = taxo.get_label(src) if src in taxo.nodes else str(src)
+            tgt_lbl = taxo.get_label(tgt) if tgt in taxo.nodes else str(tgt)
+            edge_info = [
+                html.P('Edge Properties', className='fw-bold mb-1', style={'fontSize': '12px', 'color': '#555'}),
+                html.Table([
+                    html.Tr([html.Th('Label'), html.Td(edge_label or '—')]),
+                    html.Tr([html.Th('Source'), html.Td(html.Span(
+                        f"{src_lbl} [{src}]",
+                        id={'type': 'tree-node', 'index': src},
+                        style={'cursor': 'pointer', 'color': '#1a73e8', 'textDecoration': 'underline'},
+                    ))]),
+                    html.Tr([html.Th('Target'), html.Td(html.Span(
+                        f"{tgt_lbl} [{tgt}]",
+                        id={'type': 'tree-node', 'index': tgt},
+                        style={'cursor': 'pointer', 'color': '#1a73e8', 'textDecoration': 'underline'},
+                    ))]),
+                ], className='table table-sm table-borderless', style={'fontSize': '12px'}),
+            ]
+            return [edge_info, True, True, True, True, True, not has_undo]
+
+        # Canvas tap (empty area): reset panel to empty (node selection is cleared by Cytoscape)
+        if 'tapOnCanvasData' in triggered_prop and tap_canvas is not None:
+            if selected_id is None or selected_id not in _ADAPTER.taxo.nodes:
+                return [_empty_info(), True, True, True, True, True, not has_undo]
+            # Node is still selected — show node info (don't reset)
+            info = _node_info_children(selected_id)
+            return [info, False, False, False, False, False, not has_undo]
+
         if selected_id is None or selected_id not in _ADAPTER.taxo.nodes:
             return [_empty_info(), True, True, True, True, True, not has_undo]
 
