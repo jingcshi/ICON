@@ -10,11 +10,12 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy",
     "networkx",
-    "owlready2",
+    "rdflib",
     "faiss-gpu",
     "nltk",
     "tqdm",
     "click",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]

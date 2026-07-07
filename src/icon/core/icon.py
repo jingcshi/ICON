@@ -5,15 +5,12 @@ from typing import Any, Callable, Hashable, Iterable, List, Literal, Optional, S
 
 import networkx as nx
 import numpy as np
-import owlready2 as o2
-import torch
 from tqdm.auto import tqdm
 
 import icon.config.config as _config
 from icon.core.taxonomy import Taxonomy
 from icon.utils.log_style import Fore, Style
 from icon.utils.tokenset_utils import tokenset
-from icon.utils.vector_index import FaissVectorStore
 
 
 class NullContext:
@@ -38,7 +35,7 @@ class ICON:
     '''
 
     def __init__(self,
-                data: Union[Taxonomy,o2.Ontology]=None,
+                data=None,
                 emb_model=None,
                 gen_model=None,
                 sub_model=None,
@@ -67,8 +64,6 @@ class ICON:
                 logging: Union[bool, int, List[str]]=1
                 ) -> None:
 
-        if isinstance(data,o2.Ontology):
-            data = Taxonomy.from_ontology(data)
         self.data = data
         self.models = _config.icon_models(emb_model,gen_model,sub_model)
         self._caches = _config.icon_caches()
@@ -132,6 +127,7 @@ class ICON:
 
         concepts = list(taxo.nodes())
         sentences = self.models.emb_model(taxo.get_label(concepts))
+        from icon.utils.vector_index import FaissVectorStore
         self._caches.vector_store[id(taxo)] = FaissVectorStore(sentences, concepts)
 
     def add_concepts_to_vector_index(self, taxo: Taxonomy, c: Union[Hashable, List[Hashable]]) -> None:
@@ -564,7 +560,11 @@ class ICON:
         self.update_config(**kwargs)
         if self.config.rand_seed is not None:
             np.random.seed(self.config.rand_seed)
-            torch.manual_seed(self.config.rand_seed)
+            try:
+                import torch
+                torch.manual_seed(self.config.rand_seed)
+            except ImportError:
+                pass
         if not self.data:
             raise ValueError('Missing input data')
         self._status.working_taxo = deepcopy(self.data)

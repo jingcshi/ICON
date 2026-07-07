@@ -2,7 +2,7 @@ import sys
 
 import click
 
-from icon.core.taxonomy import from_json, from_ontology
+from icon.core.taxonomy import from_json, from_owl
 
 
 @click.group()
@@ -21,9 +21,7 @@ def taxo():
 def taxo_view(file, depth):
     """Print stats and a tree preview of a taxonomy file."""
     if file.endswith(".owl") or file.endswith(".rdf"):
-        import owlready2 as o2
-        onto = o2.get_ontology(f"file://{file}").load()
-        taxo = from_ontology(onto)
+        taxo = from_owl(file)
     else:
         taxo = from_json(file)
 
@@ -58,9 +56,7 @@ def taxo_view(file, depth):
 def taxo_convert(src, dst):
     """Convert a taxonomy between JSON and OWL formats."""
     if src.endswith(".owl") or src.endswith(".rdf"):
-        import owlready2 as o2
-        onto = o2.get_ontology(f"file://{src}").load()
-        taxo = from_ontology(onto)
+        taxo = from_owl(src)
     else:
         taxo = from_json(src)
 
@@ -78,9 +74,7 @@ def taxo_validate(file):
     import networkx as nx
 
     if file.endswith(".owl") or file.endswith(".rdf"):
-        import owlready2 as o2
-        onto = o2.get_ontology(f"file://{file}").load()
-        taxo = from_ontology(onto)
+        taxo = from_owl(file)
     else:
         taxo = from_json(file)
 

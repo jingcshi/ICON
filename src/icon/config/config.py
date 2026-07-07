@@ -172,6 +172,64 @@ class iconforcategorymove_config(icon_config):
     auto_config: iconforcategorymove_auto_config = field(default_factory=lambda: iconforcategorymove_auto_config())
     manual_config: iconforcategorymove_manual_config = field(default_factory=lambda: iconforcategorymove_manual_config())
 
+def icon_config_from_dict(d: dict) -> icon_config:
+    '''Populate an icon_config from a flat or nested dict (e.g. parsed YAML).
+
+    Keys match the flat parameter names accepted by ICON.__init__ (retrieve_size,
+    threshold, …) or the nested dot-path (sub_config.search.threshold). Callable
+    fields (eqv_score_func) and internal-state fields are ignored.
+    '''
+    _SKIP = {'eqv_score_func'}
+
+    def _apply(conf: tree_config, d: dict) -> tree_config:
+        for k, v in d.items():
+            if k in _SKIP:
+                continue
+            # nested sub-config block
+            if isinstance(v, dict):
+                leaf_name = None
+                for f in fields(conf):
+                    if f.name == k and isinstance(getattr(conf, f.name), tree_config):
+                        leaf_name = f.name
+                        break
+                if leaf_name is not None:
+                    updated_sub = _apply(getattr(conf, leaf_name), v)
+                    conf = replace(conf, **{leaf_name: updated_sub})
+                    continue
+            # coerce re.Pattern strings
+            if isinstance(v, str) and locate_arg(conf, k):
+                loc = locate_arg(conf, k)
+                current = getattr(conf, loc.split('.')[0]) if '.' in loc else getattr(conf, loc)
+                if isinstance(current, re.Pattern):
+                    v = re.compile(v)
+            # coerce lists to np.ndarray where field expects it
+            if isinstance(v, list):
+                loc = locate_arg(conf, k)
+                if loc:
+                    parts = loc.split('.')
+                    obj = conf
+                    for p in parts[:-1]:
+                        obj = getattr(obj, p)
+                    current = getattr(obj, parts[-1])
+                    if isinstance(current, np.ndarray):
+                        v = np.array(v, dtype=float)
+            try:
+                conf = Update_config(conf, k, v)
+            except KeyError:
+                pass
+        return conf
+
+    return _apply(icon_config(), d)
+
+
+def icon_config_from_yaml(path: str) -> icon_config:
+    '''Load an icon_config from a YAML file.'''
+    import yaml
+    with open(path) as f:
+        d = yaml.safe_load(f) or {}
+    return icon_config_from_dict(d)
+
+
 def locate_arg(conf: tree_config, arg: str) -> str:
 
     if arg in conf.leaf_fields():

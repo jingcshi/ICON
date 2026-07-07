@@ -9,7 +9,6 @@ from typing import Hashable, Iterable, List, Literal, Optional, Set, Type, Union
 
 import networkx as nx
 import numpy as np
-import owlready2 as o2
 
 reID = re.compile(r'\d+')
 reIRI = re.compile(r'#(.*)$')
@@ -739,43 +738,67 @@ def from_json(file_path: Union[str, os.PathLike], as_tree: bool=False) -> Taxono
         return TreeTaxonomy(taxo)
     return taxo
 
-def from_ontology(onto: o2.Ontology) -> Taxonomy:
+def from_owl(path: str) -> Taxonomy:
     '''
-    Extract the taxonomy from the partial order of named subsumptions (subClassOf) of an Ontology.
+    Load an OWL/RDF file and extract its taxonomy from owl:Class / rdfs:subClassOf relations.
 
-    This method works by tracking edges recursively downward from owl.Thing (which will be assigned the key 0).
+    owl:Thing is assigned node id 0 and labelled 'Root Concept'. All other classes must have a
+    fragment IRI of the form #<integer> (e.g. #1234); that integer becomes the node id.
+    The first rdfs:label of each class is used as the node label.
 
-    Extracted edges will be labelled 'original' in the taxonomy.
-
-    All informations of the ontology other than the IRIs of classes, the first label of each class and the subClassOf relations, will be ignored.
+    Extracted edges are labelled 'original'. Transitive reduction is applied before returning.
     '''
+    from rdflib import OWL, RDF, RDFS, Graph, URIRef
+
+    OWL_THING = URIRef('http://www.w3.org/2002/07/owl#Thing')
+
+    g = Graph()
+    g.parse(path)
+
+    # collect labels
+    labels = {}
+    for cls, _, lbl in g.triples((None, RDFS.label, None)):
+        if (cls, RDF.type, OWL.Class) in g:
+            labels[str(cls)] = str(lbl)
+
+    # collect subClassOf edges (named classes only, skip blank nodes)
+    children = {}  # parent_iri -> [child_iri]
+    for child, _, parent in g.triples((None, RDFS.subClassOf, None)):
+        if isinstance(child, URIRef) and isinstance(parent, URIRef):
+            children.setdefault(str(parent), []).append(str(child))
+
     taxo = Taxonomy()
-    with onto:
-        visited = {}
-        queue = deque([('http://www.w3.org/2002/07/owl#Thing','')])
-        while queue:
-            newiri,superiri = queue.popleft()
-            newclass = o2.IRIS[newiri]
-            superclass = o2.IRIS[superiri] if superiri else None
-            visited[(newiri, superiri)] = True
-            if newclass == o2.Thing:
-                node_id = 0
-                node_label = 'Root Concept'
-            else:
-                node_id = int(re.findall(reIRI,newiri)[0])
-                node_label = newclass.label[0]
-            taxo.add_node(node_id,label=node_label)
-            if superclass:
-                super_id = 0 if superclass == o2.Thing else int(re.findall(reIRI,superiri)[0])
-                taxo.add_edge(node_id,super_id,label='original')
-            for subclass in newclass.subclasses():
-                subiri = subclass.iri
-                if (subiri,newiri) not in visited:
-                    queue.append((subiri,newiri))
+    taxo.add_node(0, label='Root Concept')
+
+    queue = deque([str(OWL_THING)])
+    visited = set()
+    visited.add(str(OWL_THING))
+
+    while queue:
+        parent_iri = queue.popleft()
+        if parent_iri == str(OWL_THING):
+            parent_id = 0
+        else:
+            frag = re.findall(reIRI, parent_iri)
+            if not frag:
+                continue
+            parent_id = int(frag[0])
+
+        for child_iri in children.get(parent_iri, []):
+            frag = re.findall(reIRI, child_iri)
+            if not frag:
+                continue
+            child_id = int(frag[0])
+            lbl = labels.get(child_iri, frag[0])
+            taxo.add_node(child_id, label=lbl)
+            taxo.add_edge(child_id, parent_id, label='original')
+            if child_iri not in visited:
+                visited.add(child_iri)
+                queue.append(child_iri)
+
     tr = nx.transitive_reduction(taxo)
     tr.add_nodes_from(taxo.nodes(data=True))
-    taxo = Taxonomy(tr)
-    return taxo
+    return Taxonomy(tr)
 
 class TreeTaxonomy(Taxonomy):
     '''

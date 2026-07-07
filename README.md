@@ -10,7 +10,7 @@
 
 ## Dependencies
 
-Core: `numpy`, `owlready2`, `networkx`, `faiss`, `tqdm`, `nltk`  
+Core: `numpy`, `rdflib`, `networkx`, `faiss`, `tqdm`, `nltk`  
 Sub-model training: `torch`, `pandas`, `transformers`, `datasets`, `evaluate`, `info-nce-pytorch`  
 Python ≥ 3.9
 

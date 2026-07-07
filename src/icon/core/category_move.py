@@ -5,8 +5,6 @@ from typing import Any, Hashable, Iterable, List, Literal, Optional, Union
 
 import networkx as nx
 import numpy as np
-import owlready2 as o2
-import torch
 from tqdm.auto import tqdm
 
 import icon.config.config as _config
@@ -18,7 +16,7 @@ from icon.utils.log_style import Fore, Style
 class ICONforCategoryMove(_icon.ICON):
 
     def __init__(self,
-                data: Union[Taxonomy,o2.Ontology]=None,
+                data=None,
                 emb_model=None,
                 gen_model=None,
                 sub_model=None,
@@ -48,8 +46,6 @@ class ICONforCategoryMove(_icon.ICON):
                 logging: Union[bool, int, List[str]]=1
                 ) -> None:
 
-        if isinstance(data,o2.Ontology):
-            data = Taxonomy.from_ontology(data)
         self.data = data
         self.models = _config.icon_models(emb_model,gen_model,sub_model)
         self._caches = _config.iconforcategorymove_caches()
@@ -362,7 +358,11 @@ class ICONforCategoryMove(_icon.ICON):
         self.update_config(**kwargs)
         if self.config.rand_seed is not None:
             np.random.seed(self.config.rand_seed)
-            torch.manual_seed(self.config.rand_seed)
+            try:
+                import torch
+                torch.manual_seed(self.config.rand_seed)
+            except ImportError:
+                pass
         if not self.data:
             raise ValueError('Missing input data')
         self._status.working_taxo = deepcopy(self.data)

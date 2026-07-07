@@ -40,13 +40,13 @@ Each edge object must have:
 ## Loading and saving
 
 ```python
-from icon import from_json, from_ontology
+from icon import from_json, from_owl
 
 # Load from JSON file
 taxo = from_json("path/to/taxonomy.json")
 
-# Load from OWL ontology (owlready2.Ontology object)
-taxo = from_ontology(ontology)
+# Load from OWL/RDF file (RDF/XML, Turtle, N-Triples, etc.)
+taxo = from_owl("path/to/taxonomy.owl")
 
 # Save back to JSON
 taxo.to_json("path/to/output.json", indent=2)
