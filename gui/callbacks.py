@@ -40,6 +40,10 @@ def _node_info_children(node_id, title: str = 'Node') -> list:
     depth    = taxo.get_depth(node_id)
     parents  = list(taxo.get_parents(node_id))
     children = list(taxo.get_children(node_id))
+    siblings = sorted(
+        {c for p in parents for c in taxo.get_children(p)} - {node_id},
+        key=lambda n: taxo.get_label(n),
+    )
 
     def fmt_clickable(ids):
         if not ids:
@@ -71,6 +75,7 @@ def _node_info_children(node_id, title: str = 'Node') -> list:
             html.Tr([html.Th('Label'),    html.Td(label)]),
             html.Tr([html.Th('Depth'),    html.Td(str(depth))]),
             html.Tr([html.Th('Parents'),  html.Td(fmt_clickable(parents), style={'wordBreak': 'break-word'})]),
+            html.Tr([html.Th('Siblings'), html.Td(fmt_clickable(siblings), style={'wordBreak': 'break-word'})]),
             html.Tr([html.Th('Children'), html.Td(fmt_clickable(children), style={'wordBreak': 'break-word'})]),
         ], className='table table-sm table-borderless', style={'fontSize': '12px'}),
     ]
@@ -83,6 +88,7 @@ def _build_cyto_elements(node_id):
 
     ancestors = set(sub.successors(node_id))   if node_id in sub else set()
     children  = set(sub.predecessors(node_id)) if node_id in sub else set()
+    siblings  = {c for p in taxo.get_parents(node_id) for c in taxo.get_children(p)} - {node_id}
 
     nodes = []
     for n in sub.nodes:
@@ -92,6 +98,8 @@ def _build_cyto_elements(node_id):
             role = 'ancestor'
         elif n in children:
             role = 'child'
+        elif n in siblings:
+            role = 'sibling'
         else:
             role = 'context'
         lbl = taxo.get_label(n)

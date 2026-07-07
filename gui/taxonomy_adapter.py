@@ -121,7 +121,7 @@ class TaxonomyAdapter:
     # ── Subgraph for canvas ────────────────────────────────────────────────────
 
     def neighborhood(self, node_id, radius: int = 2):
-        """Return a subgraph centered on node_id up to `radius` hops (ancestor + descendant)."""
+        """Return a subgraph centered on node_id up to `radius` hops (ancestor + descendant + siblings)."""
         taxo = self._taxo
         visible = {node_id}
         # ancestors up to radius
@@ -132,6 +132,11 @@ class TaxonomyAdapter:
                 next_f.update(taxo.get_parents(n))
             visible.update(next_f)
             frontier = next_f
+        # direct siblings: children of direct parents (excluding self)
+        for p in taxo.get_parents(node_id):
+            visible.update(taxo.get_children(p))
+        visible.discard(node_id)
+        visible.add(node_id)
         # descendants up to radius
         frontier = {node_id}
         for _ in range(radius):

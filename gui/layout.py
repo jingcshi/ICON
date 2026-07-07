@@ -40,6 +40,10 @@ CYTO_STYLESHEET = [
         'style': {'background-color': '#A8D08D', 'color': '#000'},
     },
     {
+        'selector': 'node[role = "sibling"]',
+        'style': {'background-color': '#5B9BD5', 'color': '#fff'},
+    },
+    {
         'selector': 'node[role = "context"]',
         'style': {'background-color': '#9B59B6', 'color': '#fff'},
     },
@@ -139,6 +143,7 @@ def build_layout() -> html.Div:
             _legend_dot('#FFD966', 'Selected'),
             _legend_dot('#E05C3A', 'Parent'),
             _legend_dot('#A8D08D', 'Child'),
+            _legend_dot('#5B9BD5', 'Sibling'),
             _legend_dot('#9B59B6', 'Context'),
         ], className='d-flex gap-3 mt-1', style={'fontSize': '12px'}),
     ], width=6)
