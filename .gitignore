@@ -187,5 +187,4 @@ experiments/evaluation/results/**
 # Confidential
 *repr*
 *cat_desc*
-*ebay*
 .DS_store
