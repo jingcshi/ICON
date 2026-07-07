@@ -38,6 +38,8 @@ ICON requires three plug-in models with these signatures:
 
 `emb_model` and `gen_model` are optional depending on the operating mode (see [configuration](docs/configuration.md)).
 
+**eBay models**: Models fine-tuned on eBay data are available at RNO HDFS: `/user/jingcshi/ICON_models/`.
+
 We provide a fine-tuning pipeline using BERT (emb/sub) and T5 (gen). See [fine-tuning data reference](docs/fine-tuning-data.md) and the notebooks under `experiments/model_training/`.
 
 ## Documentation
