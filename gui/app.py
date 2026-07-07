@@ -19,4 +19,9 @@ if __name__ == '__main__':
     app = create_app()
     port = int(os.environ.get('ICON_GUI_PORT', 8050))
     print(f"ICON Taxonomy Viewer running at http://localhost:{port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(
+        host='0.0.0.0',
+        port=port,
+        debug=False,
+        dev_tools_disable_version_check=True,
+    )
