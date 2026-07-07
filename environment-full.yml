@@ -1,0 +1,36 @@
+name: icon-dev
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # Core taxonomy
+      - numpy==2.2.6
+      - networkx==3.4.2
+      - rdflib==7.6.0
+      - nltk==3.9.4
+      - tqdm
+      - click==8.3.1
+      - pyyaml==6.0.3
+      # GPU / FAISS — install from PyPI (faiss-gpu wheel bundles CUDA)
+      - faiss-gpu==1.14.3
+      # ML training pipeline
+      - torch==2.11.0+cu128
+      - transformers==5.13.0
+      - datasets==5.0.0
+      - evaluate==0.4.6
+      - info-nce-pytorch==0.1.4
+      - pandas==2.3.3
+      - scikit-learn==1.7.2
+      # GUI
+      - dash
+      - dash-cytoscape
+      - dash-bootstrap-components
+      # Dev
+      - pytest
+      - ruff
+      - mypy
+      # Install the package itself in editable mode (run after env creation):
+      # pip install -e ".[training,gui,dev]"

@@ -1,0 +1,26 @@
+name: icon-gui
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      # Core taxonomy (no GPU, no ML)
+      - numpy
+      - networkx
+      - rdflib
+      - nltk
+      - tqdm
+      - click
+      - pyyaml
+      # GUI
+      - dash
+      - dash-cytoscape
+      - dash-bootstrap-components
+      # Dev
+      - pytest
+      - ruff
+      - mypy
+      # Install the package itself in editable mode (run after env creation):
+      # pip install -e ".[gui,dev]"
