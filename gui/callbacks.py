@@ -63,8 +63,8 @@ def _build_cyto_elements(node_id):
     sub = _ADAPTER.neighborhood(node_id, radius=_RADIUS)
     taxo = _ADAPTER.taxo
 
-    ancestors = set(sub.predecessors(node_id)) if node_id in sub else set()
-    children  = set(sub.successors(node_id))   if node_id in sub else set()
+    ancestors = set(sub.successors(node_id))   if node_id in sub else set()
+    children  = set(sub.predecessors(node_id)) if node_id in sub else set()
 
     nodes = []
     for n in sub.nodes:
